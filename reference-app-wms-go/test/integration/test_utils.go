@@ -113,7 +113,7 @@ func SetupTestDB(t *testing.T) (*sqlx.DB, func()) {
 // StartTestServer creates and starts a test server instance
 func StartTestServer(t *testing.T, dbConn *sqlx.DB) (*server.Server, func()) {
 	// Create temporal client
-	temporalClient, err := client.Dial(client.Options{})
+	temporalClient, err := client.Dial(client.Options{HostPort: os.Getenv("TEMPORAL_GRPC_ENDPOINT")})
 	require.NoError(t, err)
 
 	// Create and start server
