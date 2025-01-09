@@ -26,7 +26,7 @@ func main() {
 	defer dbConn.Close()
 
 	// Create temporal client
-	temporalClient, err := client.Dial(client.Options{HostPort: os.Getenv("TEMPORAL_GRPC_ENDPOINT")})
+	temporalClient, err := client.Dial(client.Options{})
 	if err != nil {
 		log.Fatalln("Failed to create temporal client:", err)
 	}

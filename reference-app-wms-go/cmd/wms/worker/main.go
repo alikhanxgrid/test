@@ -15,9 +15,7 @@ import (
 const TemporalTaskQueue = "DWR-TASK-QUEUE"
 
 func main() {
-	c, err := client.Dial(client.Options{
-		HostPort: os.Getenv("TEMPORAL_GRPC_ENDPOINT"),
-	})
+	c, err := client.Dial(client.Options{})
 	if err != nil {
 		log.Fatalln("Unable to create client", err)
 	}

@@ -16,7 +16,10 @@ import (
 
 	"reference-app-wms-go/app/analytics"
 	"reference-app-wms-go/app/db"
-	"reference-app-wms-go/app/dwr/api"
+
+	// "reference-app-wms-go/app/dwr/api"
+	"reference-app-wms-go/app/dwr/api/v2/impl"
+	apiv2 "reference-app-wms-go/app/dwr/api/v2/openapi"
 	"reference-app-wms-go/app/scheduling"
 )
 
@@ -29,7 +32,8 @@ type Server struct {
 	analyticsService analytics.AnalyticsService
 	schedulingAPI    *scheduling.SchedulingAPI
 	analyticsAPI     *analytics.AnalyticsAPI
-	jobExecutionAPI  *api.JobExecutionAPI
+	// jobExecutionAPI  *api.JobExecutionAPI
+	jobExecutionV2 *impl.JobExecutionAPIV2
 }
 
 // NewServer creates a new Server instance
@@ -42,7 +46,10 @@ func NewServer(sqlxDB *sqlx.DB, temporalClient client.Client) *Server {
 	schedulingService := scheduling.NewSchedulingService(dbWrapper)
 	schedulingAPI := scheduling.NewSchedulingAPI(schedulingService, logger)
 	analyticsAPI := analytics.NewAnalyticsAPI(analyticsService, logger)
-	jobExecutionAPI := api.NewJobExecutionAPI(temporalClient)
+
+	// Initialize both v1 and v2 job execution APIs
+	// jobExecutionAPI := api.NewJobExecutionAPI(temporalClient)
+	jobExecutionV2 := impl.NewJobExecutionAPIV2(temporalClient)
 
 	server := &Server{
 		router:           router,
@@ -52,7 +59,8 @@ func NewServer(sqlxDB *sqlx.DB, temporalClient client.Client) *Server {
 		analyticsService: analyticsService,
 		schedulingAPI:    schedulingAPI,
 		analyticsAPI:     analyticsAPI,
-		jobExecutionAPI:  jobExecutionAPI,
+		// jobExecutionAPI:  jobExecutionAPI,
+		jobExecutionV2: jobExecutionV2,
 	}
 
 	server.setupRoutes()
@@ -61,9 +69,13 @@ func NewServer(sqlxDB *sqlx.DB, temporalClient client.Client) *Server {
 
 // setupRoutes configures all the routes for the server
 func (s *Server) setupRoutes() {
+	// Keep v1 APIs at root level for backward compatibility
 	s.schedulingAPI.SetupRoutes(s.router)
 	s.analyticsAPI.SetupRoutes(s.router)
-	s.jobExecutionAPI.SetupRoutes(s.router)
+	// s.jobExecutionAPI.SetupRoutes(s.router)
+
+	// Register v2 job execution handlers at root level instead of /api/v2
+	apiv2.RegisterHandlers(s.router, s.jobExecutionV2)
 }
 
 // Start starts the HTTP server

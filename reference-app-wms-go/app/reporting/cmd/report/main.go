@@ -176,7 +176,7 @@ func main() {
 
 func initAnalyticsService() analytics.AnalyticsService {
 	// Initialize Temporal client
-	temporalClient, err := client.Dial(client.Options{HostPort: os.Getenv("TEMPORAL_GRPC_ENDPOINT")})
+	temporalClient, err := client.Dial(client.Options{})
 	if err != nil {
 		log.Fatalf("Failed to create Temporal client: %v", err)
 	}

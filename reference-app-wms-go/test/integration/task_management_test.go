@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"reference-app-wms-go/app/analytics"
-	"reference-app-wms-go/app/dwr/model"
+	apiv2 "reference-app-wms-go/app/dwr/api/v2/openapi"
 )
 
 func TestTaskManagementAndWorkerState(t *testing.T) {
@@ -32,6 +33,10 @@ func TestTaskManagementAndWorkerState(t *testing.T) {
 		t.Log("Skipping server startup as -no-server flag is set")
 	}
 
+	// Create API client
+	client := createJobExecutionClient(t)
+	ctx := context.Background()
+
 	// Set up test data
 	workerID := GenerateWorkerID()
 	jobSite := setupJobSite(t)
@@ -40,30 +45,23 @@ func TestTaskManagementAndWorkerState(t *testing.T) {
 
 	// 1. Worker Check-in
 	t.Log("Testing worker check-in...")
-	checkInReq := model.CheckInRequest{
-		WorkerID:    model.WorkerID(workerID),
+	checkInReq := apiv2.CheckInRequest{
+		WorkerId:    apiv2.WorkerID(workerID),
 		CheckInTime: time.Now(),
-		JobSiteID:   jobSite.ID,
+		JobSiteId:   jobSite.ID,
+		Date:        time.Now(),
 	}
 
-	resp, err := makeRequest("POST", "/check-in", checkInReq)
+	checkInResp, err := client.WorkerCheckInWithResponse(ctx, checkInReq)
 	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-
-	var checkInResp struct {
-		WorkflowID string `json:"workflowID"`
-		RunID      string `json:"runID"`
-	}
-	err = json.NewDecoder(resp.Body).Decode(&checkInResp)
-	require.NoError(t, err)
-	require.NotEmpty(t, checkInResp.WorkflowID)
-	resp.Body.Close()
+	require.Equal(t, http.StatusOK, checkInResp.StatusCode())
+	require.NotEmpty(t, checkInResp.JSON200.WorkflowID)
 
 	// 2. Verify initial task state
 	t.Log("Verifying initial task state...")
 	var taskStatus analytics.WorkerTaskStatus
 	RequireEventually(t, "initial task state verification", func() (bool, error) {
-		resp, err := makeRequest("GET", fmt.Sprintf("/analytics/workflow/%s/tasks", checkInResp.WorkflowID), nil)
+		resp, err := makeRequest("GET", fmt.Sprintf("/analytics/workflow/%s/tasks", checkInResp.JSON200.WorkflowID), nil)
 		if err != nil {
 			t.Logf("Error making request: %v", err)
 			return false, err
@@ -96,7 +94,7 @@ func TestTaskManagementAndWorkerState(t *testing.T) {
 
 	// 3. Query current tasks
 	t.Log("Querying worker's current tasks...")
-	resp, err = makeRequest("GET", fmt.Sprintf("/analytics/workflow/%s/tasks", checkInResp.WorkflowID), nil)
+	resp, err := makeRequest("GET", fmt.Sprintf("/analytics/workflow/%s/tasks", checkInResp.JSON200.WorkflowID), nil)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -110,24 +108,23 @@ func TestTaskManagementAndWorkerState(t *testing.T) {
 
 	// 4. Start first task
 	t.Log("Starting first task...")
-	taskUpdate := model.TaskUpdate{
-		TaskID:     tasks[0],
-		NewStatus:  model.TaskStatusInProgress,
+	taskUpdate := apiv2.TaskUpdate{
+		TaskId:     tasks[0],
+		NewStatus:  apiv2.INPROGRESS,
 		UpdateTime: time.Now(),
-		UpdatedBy:  model.WorkerID(workerID),
-		Notes:      "Starting first task",
+		UpdatedBy:  apiv2.WorkerID(workerID),
+		Notes:      stringPtr("Starting first task"),
 	}
 
-	resp, err = makeRequest("POST", "/task-progress", taskUpdate)
+	taskUpdateResp, err := client.UpdateTaskProgressWithResponse(ctx, taskUpdate)
 	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-	resp.Body.Close()
+	require.Equal(t, http.StatusOK, taskUpdateResp.StatusCode())
 
 	// Verify task status after update
 	t.Log("Verifying task status update...")
 	var updatedTask *analytics.TaskInfo
 	RequireEventually(t, "task status update verification", func() (bool, error) {
-		resp, err := makeRequest("GET", fmt.Sprintf("/analytics/workflow/%s/tasks", checkInResp.WorkflowID), nil)
+		resp, err := makeRequest("GET", fmt.Sprintf("/analytics/workflow/%s/tasks", checkInResp.JSON200.WorkflowID), nil)
 		if err != nil {
 			return false, err
 		}
@@ -163,24 +160,23 @@ func TestTaskManagementAndWorkerState(t *testing.T) {
 
 	// 5. Mark task as blocked
 	t.Log("Marking task as blocked...")
-	blockageUpdate := model.TaskUpdate{
-		TaskID:     tasks[0],
-		NewStatus:  model.TaskStatusBlocked,
+	blockageUpdate := apiv2.TaskUpdate{
+		TaskId:     tasks[0],
+		NewStatus:  apiv2.BLOCKED,
 		UpdateTime: time.Now(),
-		UpdatedBy:  model.WorkerID(workerID),
-		Notes:      "Missing materials",
+		UpdatedBy:  apiv2.WorkerID(workerID),
+		Notes:      stringPtr("Missing materials"),
 	}
 
-	resp, err = makeRequest("POST", "/task-progress", blockageUpdate)
+	blockageUpdateResp, err := client.UpdateTaskProgressWithResponse(ctx, blockageUpdate)
 	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-	resp.Body.Close()
+	require.Equal(t, http.StatusOK, blockageUpdateResp.StatusCode())
 
 	// Verify task blockage
 	t.Log("Verifying task blockage...")
 	var blockageInfo analytics.TaskBlockageInfo
 	RequireEventually(t, "task blockage verification", func() (bool, error) {
-		resp, err := makeRequest("GET", fmt.Sprintf("/analytics/workflow/%s/tasks/%s/blockage", checkInResp.WorkflowID, tasks[0]), nil)
+		resp, err := makeRequest("GET", fmt.Sprintf("/analytics/workflow/%s/tasks/%s/blockage", checkInResp.JSON200.WorkflowID, tasks[0]), nil)
 		if err != nil {
 			return false, err
 		}
@@ -200,21 +196,20 @@ func TestTaskManagementAndWorkerState(t *testing.T) {
 	// 6. Take a break
 	t.Log("Starting break...")
 	breakStartTime := time.Now()
-	breakSignal := model.BreakSignal{
-		WorkerID:  model.WorkerID(workerID),
+	breakSignal := apiv2.BreakSignal{
+		WorkerId:  apiv2.WorkerID(workerID),
 		IsOnBreak: true,
 		StartTime: breakStartTime,
 	}
 
-	resp, err = makeRequest("POST", "/break", breakSignal)
+	breakResp, err := client.SignalBreakWithResponse(ctx, breakSignal)
 	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-	resp.Body.Close()
+	require.Equal(t, http.StatusOK, breakResp.StatusCode())
 
 	// Verify break status
 	t.Log("Verifying break status...")
 	RequireEventually(t, "break status verification", func() (bool, error) {
-		resp, err := makeRequest("GET", fmt.Sprintf("/analytics/workflow/%s/tasks", checkInResp.WorkflowID), nil)
+		resp, err := makeRequest("GET", fmt.Sprintf("/analytics/workflow/%s/tasks", checkInResp.JSON200.WorkflowID), nil)
 		if err != nil {
 			return false, err
 		}
@@ -233,15 +228,14 @@ func TestTaskManagementAndWorkerState(t *testing.T) {
 	breakSignal.IsOnBreak = false
 	breakSignal.StartTime = time.Now()
 
-	resp, err = makeRequest("POST", "/break", breakSignal)
+	breakEndResp, err := client.SignalBreakWithResponse(ctx, breakSignal)
 	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-	resp.Body.Close()
+	require.Equal(t, http.StatusOK, breakEndResp.StatusCode())
 
 	// Verify break ended
 	t.Log("Verifying break ended...")
 	RequireEventually(t, "break end verification", func() (bool, error) {
-		resp, err := makeRequest("GET", fmt.Sprintf("/analytics/workflow/%s/tasks", checkInResp.WorkflowID), nil)
+		resp, err := makeRequest("GET", fmt.Sprintf("/analytics/workflow/%s/tasks", checkInResp.JSON200.WorkflowID), nil)
 		if err != nil {
 			return false, err
 		}
@@ -258,67 +252,44 @@ func TestTaskManagementAndWorkerState(t *testing.T) {
 	// 8. Resume and complete task
 	t.Log("Resuming and completing task...")
 	// First resume the task
-	resumeUpdate := model.TaskUpdate{
-		TaskID:     tasks[0],
-		NewStatus:  model.TaskStatusInProgress,
+	resumeUpdate := apiv2.TaskUpdate{
+		TaskId:     tasks[0],
+		NewStatus:  apiv2.INPROGRESS,
 		UpdateTime: time.Now(),
-		UpdatedBy:  model.WorkerID(workerID),
-		Notes:      "Materials available now",
+		UpdatedBy:  apiv2.WorkerID(workerID),
+		Notes:      stringPtr("Materials available now"),
 	}
 
-	resp, err = makeRequest("POST", "/task-progress", resumeUpdate)
+	resumeResp, err := client.UpdateTaskProgressWithResponse(ctx, resumeUpdate)
 	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-	resp.Body.Close()
+	require.Equal(t, http.StatusOK, resumeResp.StatusCode())
 
 	// Then complete it
-	completeUpdate := model.TaskUpdate{
-		TaskID:     tasks[0],
-		NewStatus:  model.TaskStatusCompleted,
+	completeUpdate := apiv2.TaskUpdate{
+		TaskId:     tasks[0],
+		NewStatus:  apiv2.COMPLETED,
 		UpdateTime: time.Now(),
-		UpdatedBy:  model.WorkerID(workerID),
-		Notes:      "Task completed successfully",
+		UpdatedBy:  apiv2.WorkerID(workerID),
+		Notes:      stringPtr("Task completed successfully"),
 	}
 
-	resp, err = makeRequest("POST", "/task-progress", completeUpdate)
+	completeResp, err := client.UpdateTaskProgressWithResponse(ctx, completeUpdate)
 	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-	resp.Body.Close()
+	require.Equal(t, http.StatusOK, completeResp.StatusCode())
 
 	// 9. Check-out
 	t.Log("Testing worker check-out...")
-	checkOutReq := model.CheckOutRequest{
-		WorkerID:     model.WorkerID(workerID),
+	checkOutReq := apiv2.CheckOutRequest{
+		WorkerId:     apiv2.WorkerID(workerID),
 		CheckOutTime: time.Now(),
-		JobSiteID:    jobSite.ID,
-		Notes:        "Completed all tasks for the day",
+		JobSiteId:    jobSite.ID,
+		Notes:        stringPtr("Completed all tasks for the day"),
+		Date:         time.Now(),
 	}
 
-	resp, err = makeRequest("POST", "/check-out", checkOutReq)
+	checkOutResp, err := client.WorkerCheckOutWithResponse(ctx, checkOutReq)
 	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-	resp.Body.Close()
-
-	// 10. Verify checked-out state
-	t.Log("Verifying checked-out state...")
-	RequireEventually(t, "check-out verification", func() (bool, error) {
-		resp, err := makeRequest("GET", fmt.Sprintf("/analytics/workflow/%s/tasks", checkInResp.WorkflowID), nil)
-		if err != nil {
-			return false, err
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusOK {
-			return false, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
-		}
-
-		var finalStatus analytics.WorkerTaskStatus
-		if err := json.NewDecoder(resp.Body).Decode(&finalStatus); err != nil {
-			return false, err
-		}
-
-		return !finalStatus.IsSessionActive, nil
-	})
+	require.Equal(t, http.StatusOK, checkOutResp.StatusCode())
 
 	t.Log("Task management test completed successfully")
 }

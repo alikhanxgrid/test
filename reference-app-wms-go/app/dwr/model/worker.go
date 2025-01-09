@@ -1,7 +1,6 @@
 package model
 
 import (
-	"fmt"
 	"time"
 )
 
@@ -61,13 +60,6 @@ type BreakState struct {
 	BreakMinutes int       `json:"breakMinutes"`
 }
 
-// BreakSignal represents a break start/end signal
-type BreakSignal struct {
-	WorkerID  WorkerID  `json:"workerId"`
-	IsOnBreak bool      `json:"isOnBreak"`
-	StartTime time.Time `json:"startTime"`
-}
-
 // WorkerState represents the current state of a worker during their workday
 type WorkerState struct {
 	WorkerID    WorkerID     `json:"workerId"`
@@ -75,35 +67,4 @@ type WorkerState struct {
 	CurrentTask *Task        `json:"currentTask,omitempty"`
 	LastUpdated time.Time    `json:"lastUpdated"`
 	BreakState  BreakState   `json:"breakState"`
-}
-
-// TaskUpdate represents an update to a task's status
-type TaskUpdate struct {
-	TaskID     string     `json:"taskId"`
-	NewStatus  TaskStatus `json:"newStatus"`
-	UpdateTime time.Time  `json:"updateTime"`
-	Notes      string     `json:"notes,omitempty"`
-	UpdatedBy  WorkerID   `json:"updatedBy"`
-}
-
-// CheckInRequest represents the data needed when a worker checks in
-type CheckInRequest struct {
-	WorkerID    WorkerID  `json:"workerId"`
-	CheckInTime time.Time `json:"checkInTime"`
-	JobSiteID   string    `json:"jobSiteId"`
-	Date        time.Time `json:"date"`
-}
-
-// CheckOutRequest represents the data needed when a worker checks out
-type CheckOutRequest struct {
-	WorkerID     WorkerID  `json:"workerId"`
-	CheckOutTime time.Time `json:"checkOutTime"`
-	JobSiteID    string    `json:"jobSiteId"`
-	Notes        string    `json:"notes"`
-	Date         time.Time `json:"date"`
-}
-
-// Add this function to model/worker.go
-func FormatWorkflowID(workerID WorkerID) string {
-	return fmt.Sprintf("DWR-%s", workerID)
 }

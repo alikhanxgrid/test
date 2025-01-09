@@ -25,17 +25,6 @@ type DailyWorkerRoutineState struct {
 	IsCheckedOut bool
 }
 
-// TaskUpdateSignal represents a signal for updating task status
-type TaskUpdateSignal struct {
-	Update model.TaskUpdate
-}
-
-// BreakSignal represents signals for break management
-type BreakSignal struct {
-	StartTime time.Time
-	IsOnBreak bool
-}
-
 // DailyWorkerRoutine is the main workflow that manages a worker's daily activities
 func DailyWorkerRoutine(ctx workflow.Context, params DailyWorkerRoutineParams) error {
 	logger := workflow.GetLogger(ctx)
@@ -99,7 +88,7 @@ func DailyWorkerRoutine(ctx workflow.Context, params DailyWorkerRoutineParams) e
 	selector := workflow.NewSelector(ctx)
 
 	selector.AddReceive(taskProgressChan, func(ch workflow.ReceiveChannel, more bool) {
-		var signal model.TaskUpdate
+		var signal TaskUpdateParams
 		ch.Receive(ctx, &signal)
 		logger.Info("Received task progress signal", "signal", fmt.Sprintf("%+v", signal))
 
@@ -115,13 +104,13 @@ func DailyWorkerRoutine(ctx workflow.Context, params DailyWorkerRoutineParams) e
 	})
 
 	selector.AddReceive(breakChan, func(ch workflow.ReceiveChannel, more bool) {
-		var signal BreakSignal
+		var signal BreakParams
 		ch.Receive(ctx, &signal)
 		handleBreakSignal(ctx, state, signal)
 	})
 
 	selector.AddReceive(checkOutChan, func(ch workflow.ReceiveChannel, more bool) {
-		var checkOutReq model.CheckOutRequest
+		var checkOutReq CheckOutParams
 		ch.Receive(ctx, &checkOutReq)
 		logger.Info("Received check-out signal", "request", fmt.Sprintf("%+v", checkOutReq))
 
@@ -152,7 +141,7 @@ func DailyWorkerRoutine(ctx workflow.Context, params DailyWorkerRoutineParams) e
 	return nil
 }
 
-func handleBreakSignal(ctx workflow.Context, state *DailyWorkerRoutineState, signal BreakSignal) {
+func handleBreakSignal(ctx workflow.Context, state *DailyWorkerRoutineState, signal BreakParams) {
 	logger := workflow.GetLogger(ctx)
 	logger.Info("Received break signal",
 		"signal", fmt.Sprintf("%+v", signal),
@@ -251,24 +240,22 @@ func setupQueryHandlers(ctx workflow.Context, state *DailyWorkerRoutineState, pa
 	return nil
 }
 
-// Helper function to convert between task status types
 func convertTaskStatus(status model.TaskStatus) analytics.TaskStatus {
 	switch status {
 	case model.TaskStatusPending:
 		return analytics.TaskStatusPending
 	case model.TaskStatusInProgress:
 		return analytics.TaskStatusInProgress
-	case model.TaskStatusBlocked:
-		return analytics.TaskStatusBlocked
 	case model.TaskStatusCompleted:
 		return analytics.TaskStatusCompleted
+	case model.TaskStatusBlocked:
+		return analytics.TaskStatusBlocked
 	default:
 		return analytics.TaskStatusPending
 	}
 }
 
-// handleTaskProgressSignal processes task progress updates
-func handleTaskProgressSignal(ctx workflow.Context, signal model.TaskUpdate, state *model.DailySchedule) {
+func handleTaskProgressSignal(ctx workflow.Context, signal TaskUpdateParams, schedule *model.DailySchedule) {
 	logger := workflow.GetLogger(ctx)
 	logger.Info("Received task progress signal",
 		"taskID", signal.TaskID,
@@ -277,30 +264,31 @@ func handleTaskProgressSignal(ctx workflow.Context, signal model.TaskUpdate, sta
 
 	// Log current state
 	logger.Info("Current workflow state",
-		"taskCount", len(state.Tasks),
-		"tasks", fmt.Sprintf("%+v", state.Tasks))
+		"taskCount", len(schedule.Tasks),
+		"tasks", fmt.Sprintf("%+v", schedule.Tasks))
 
 	taskFound := false
-	for i, task := range state.Tasks {
+	for i, task := range schedule.Tasks {
 		logger.Info("Checking task", "taskID", task.ID, "currentTaskID", signal.TaskID)
 		if task.ID == signal.TaskID {
 			logger.Info("Found matching task", "taskID", task.ID, "currentStatus", task.Status)
 			taskFound = true
 
 			// Update task status
-			state.Tasks[i].Status = signal.NewStatus
+			schedule.Tasks[i].Status = signal.NewStatus
 			if signal.NewStatus == model.TaskStatusBlocked {
-				state.Tasks[i].IsBlocked = true
-				state.Tasks[i].BlockedAt = signal.UpdateTime
-				state.Tasks[i].BlockReason = signal.Notes
+				schedule.Tasks[i].IsBlocked = true
+				schedule.Tasks[i].BlockedAt = signal.UpdateTime
+				schedule.Tasks[i].BlockReason = signal.Notes
 			} else {
-				state.Tasks[i].IsBlocked = false
+				schedule.Tasks[i].IsBlocked = false
+				schedule.Tasks[i].BlockReason = ""
 			}
 
 			logger.Info("Updated task status",
 				"taskID", task.ID,
 				"newStatus", signal.NewStatus,
-				"isBlocked", state.Tasks[i].IsBlocked)
+				"isBlocked", schedule.Tasks[i].IsBlocked)
 			break
 		}
 	}
@@ -323,12 +311,12 @@ func handleTaskProgressSignal(ctx workflow.Context, signal model.TaskUpdate, sta
 			newTask.PlannedStartTime = startTime
 		}
 
-		state.Tasks = append(state.Tasks, newTask)
+		schedule.Tasks = append(schedule.Tasks, newTask)
 		logger.Info("Added new task to state", "taskID", newTask.ID, "status", newTask.Status)
 	}
 
 	// Log final state
 	logger.Info("Updated workflow state",
-		"taskCount", len(state.Tasks),
-		"tasks", fmt.Sprintf("%+v", state.Tasks))
+		"taskCount", len(schedule.Tasks),
+		"tasks", fmt.Sprintf("%+v", schedule.Tasks))
 }

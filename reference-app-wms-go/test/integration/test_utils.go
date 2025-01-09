@@ -18,8 +18,14 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.temporal.io/sdk/client"
 
+	apiv2 "reference-app-wms-go/app/dwr/api/v2/openapi"
 	"reference-app-wms-go/app/server"
 )
+
+// Helper function for optional string fields
+func stringPtr(s string) *string {
+	return &s
+}
 
 const (
 	testDBName = "task_management_test_db"
@@ -113,7 +119,7 @@ func SetupTestDB(t *testing.T) (*sqlx.DB, func()) {
 // StartTestServer creates and starts a test server instance
 func StartTestServer(t *testing.T, dbConn *sqlx.DB) (*server.Server, func()) {
 	// Create temporal client
-	temporalClient, err := client.Dial(client.Options{HostPort: os.Getenv("TEMPORAL_GRPC_ENDPOINT")})
+	temporalClient, err := client.Dial(client.Options{})
 	require.NoError(t, err)
 
 	// Create and start server
@@ -238,6 +244,13 @@ func makeRequest(method, path string, body interface{}) (*http.Response, error) 
 
 	log.Printf("Response status: %s", resp.Status)
 	return resp, nil
+}
+
+// createJobExecutionClient creates a client for the job execution API
+func createJobExecutionClient(t *testing.T) *apiv2.ClientWithResponses {
+	client, err := apiv2.NewClientWithResponses(fmt.Sprintf("http://localhost:%d", serverPort))
+	require.NoError(t, err)
+	return client
 }
 
 // DecodeResponse is a helper function to decode HTTP responses
