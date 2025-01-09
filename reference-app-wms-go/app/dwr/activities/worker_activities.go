@@ -8,7 +8,6 @@ import (
 
 	"reference-app-wms-go/app/db"
 	"reference-app-wms-go/app/dwr/model"
-	"reference-app-wms-go/app/dwr/workflows"
 	"reference-app-wms-go/app/scheduling"
 
 	"go.temporal.io/sdk/activity"
@@ -16,10 +15,10 @@ import (
 
 // Activities interface defines all activities used in the DWR workflow
 type Activities interface {
-	RecordCheckInActivity(ctx context.Context, params workflows.DailyWorkerRoutineParams) (model.DailySchedule, error)
+	RecordCheckInActivity(ctx context.Context, params model.CheckInRequest) (model.DailySchedule, error)
 	RetrieveDailyTasksActivity(ctx context.Context, workerID model.WorkerID) ([]model.Task, error)
-	UpdateTaskProgressActivity(ctx context.Context, update workflows.TaskUpdateParams) error
-	RecordCheckOutActivity(ctx context.Context, params workflows.CheckOutParams) error
+	UpdateTaskProgressActivity(ctx context.Context, update model.TaskUpdate) error
+	RecordCheckOutActivity(ctx context.Context, state model.CheckOutRequest) error
 }
 
 // ActivitiesImpl implements the Activities interface
@@ -39,7 +38,7 @@ func NewActivities(schedulingService scheduling.SchedulingService) Activities {
 }
 
 // RecordCheckInActivity records a worker's check-in and retrieves their daily schedule
-func (a *ActivitiesImpl) RecordCheckInActivity(ctx context.Context, params workflows.DailyWorkerRoutineParams) (model.DailySchedule, error) {
+func (a *ActivitiesImpl) RecordCheckInActivity(ctx context.Context, params model.CheckInRequest) (model.DailySchedule, error) {
 	logger := activity.GetLogger(ctx)
 	a.logger.Printf("Recording worker check-in via Scheduling API: worker=%s, jobSiteId=%s", params.WorkerID, params.JobSiteID)
 	logger.Info("Recording worker check-in", "workerID", params.WorkerID)
@@ -96,7 +95,7 @@ func (a *ActivitiesImpl) RetrieveDailyTasksActivity(ctx context.Context, workerI
 }
 
 // UpdateTaskProgressActivity handles updates to task status and progress
-func (a *ActivitiesImpl) UpdateTaskProgressActivity(ctx context.Context, update workflows.TaskUpdateParams) error {
+func (a *ActivitiesImpl) UpdateTaskProgressActivity(ctx context.Context, update model.TaskUpdate) error {
 	logger := activity.GetLogger(ctx)
 	a.logger.Printf("Updating task progress via Scheduling API: task=%s, status=%s, worker=%s",
 		update.TaskID, update.NewStatus, update.UpdatedBy)
@@ -117,15 +116,15 @@ func (a *ActivitiesImpl) UpdateTaskProgressActivity(ctx context.Context, update 
 }
 
 // RecordCheckOutActivity processes a worker's check-out
-func (a *ActivitiesImpl) RecordCheckOutActivity(ctx context.Context, params workflows.CheckOutParams) error {
+func (a *ActivitiesImpl) RecordCheckOutActivity(ctx context.Context, req model.CheckOutRequest) error {
 	logger := activity.GetLogger(ctx)
-	a.logger.Printf("Recording worker check-out via Scheduling API: worker=%s, jobSiteId=%s", params.WorkerID, params.JobSiteID)
+	a.logger.Printf("Recording worker check-out via Scheduling API: worker=%s, jobSiteId=%s", req.WorkerID, req.JobSiteID)
 	logger.Info("Recording worker check-out",
-		"workerID", params.WorkerID,
-		"checkOutTime", params.CheckOutTime)
+		"workerID", req.WorkerID,
+		"checkOutTime", req.CheckOutTime)
 
 	// Update attendance record with check-out time
-	err := a.schedulingService.UpdateWorkerAttendance(ctx, string(params.WorkerID), params.JobSiteID, params.CheckOutTime, params.CheckOutTime)
+	err := a.schedulingService.UpdateWorkerAttendance(ctx, string(req.WorkerID), req.JobSiteID, req.CheckOutTime, req.CheckOutTime)
 	if err != nil {
 		return fmt.Errorf("failed to update worker attendance: %w", err)
 	}

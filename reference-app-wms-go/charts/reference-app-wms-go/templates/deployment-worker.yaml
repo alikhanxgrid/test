@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "reference-app-wms-go.fullname" . }}-worker
+  labels:
+    app: {{ include "reference-app-wms-go.name" . }}
+    component: worker
+    chart: {{ include "reference-app-wms-go.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  replicas: {{ .Values.replicaCountWorker }}
+  selector:
+    matchLabels:
+      app: {{ include "reference-app-wms-go.name" . }}
+      component: worker
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "reference-app-wms-go.name" . }}
+        component: worker
+        release: {{ .Release.Name }}
+    spec:
+      containers:
+      - name: worker
+        image: "{{ .Values.worker.image.repository }}:{{ .Values.worker.image.tag }}"
+        imagePullPolicy: {{ .Values.worker.image.pullPolicy }}
+        resources:
+{{- toYaml .Values.resourcesWorker | nindent 10 }}
+        envFrom:
+          - configMapRef:
+              name: {{ include "reference-app-wms-go.fullname" . }}-config

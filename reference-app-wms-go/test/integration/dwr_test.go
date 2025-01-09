@@ -1,14 +1,13 @@
 package integration
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"testing"
 	"time"
 
-	apiv2 "reference-app-wms-go/app/dwr/api/v2/openapi"
+	"reference-app-wms-go/app/dwr/model"
 
 	"github.com/stretchr/testify/require"
 )
@@ -107,23 +106,23 @@ func TestDailyWorkerRoutine(t *testing.T) {
 	data := setupTestData(t)
 	t.Logf("Test data created - Job Site: %s, Schedule: %s, Tasks: %v", data.jobSiteID, data.scheduleID, data.tasks)
 
-	// Create API client
-	client := createJobExecutionClient(t)
-	ctx := context.Background()
-
 	// 1. Worker Check-in
 	t.Log("Testing worker check-in...")
-	checkInReq := apiv2.CheckInRequest{
-		WorkerId:    apiv2.WorkerID(workerID),
+	checkInReq := model.CheckInRequest{
+		WorkerID:    workerID,
 		CheckInTime: time.Now(),
-		JobSiteId:   data.jobSiteID,
-		Date:        time.Now(),
+		JobSiteID:   data.jobSiteID,
 	}
 
-	checkInResp, err := client.WorkerCheckInWithResponse(ctx, checkInReq)
+	resp, err := makeRequest("POST", "/check-in", checkInReq)
 	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, checkInResp.StatusCode())
-	require.NotEmpty(t, checkInResp.JSON200.WorkflowID)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var workflowResp workflowResponse
+	err = json.NewDecoder(resp.Body).Decode(&workflowResp)
+	require.NoError(t, err)
+	require.NotEmpty(t, workflowResp.WorkflowID)
+	resp.Body.Close()
 
 	// Wait for workflow to initialize and retrieve tasks
 	t.Log("Waiting for workflow to initialize and retrieve tasks...")
@@ -131,87 +130,97 @@ func TestDailyWorkerRoutine(t *testing.T) {
 
 	// 2. Start first task
 	t.Log("Starting first task...")
-	taskUpdate := apiv2.TaskUpdate{
-		TaskId:     data.tasks[0], // Use actual task ID
-		NewStatus:  apiv2.INPROGRESS,
+	taskUpdate := model.TaskUpdate{
+		TaskID:     data.tasks[0], // Use actual task ID
+		NewStatus:  model.TaskStatusInProgress,
 		UpdateTime: time.Now(),
-		UpdatedBy:  apiv2.WorkerID(workerID),
-		Notes:      stringPtr("Starting work on windows"),
+		UpdatedBy:  workerID,
+		Notes:      "Starting work on windows",
 	}
 
-	taskUpdateResp, err := client.UpdateTaskProgressWithResponse(ctx, taskUpdate)
+	resp, err = makeRequest("POST", "/task-progress", taskUpdate)
 	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, taskUpdateResp.StatusCode())
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	resp.Body.Close()
 
 	// 3. Take a break
 	t.Log("Starting break...")
 	breakStartTime := time.Now()
-	breakSignal := apiv2.BreakSignal{
-		WorkerId:  apiv2.WorkerID(workerID),
+	breakSignal := struct {
+		WorkerID  string    `json:"workerId"`
+		StartTime time.Time `json:"startTime"`
+		IsStart   bool      `json:"isStart"`
+	}{
+		WorkerID:  string(workerID),
 		StartTime: breakStartTime,
-		IsOnBreak: true,
+		IsStart:   true,
 	}
 
-	breakResp, err := client.SignalBreakWithResponse(ctx, breakSignal)
+	resp, err = makeRequest("POST", "/break", breakSignal)
 	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, breakResp.StatusCode())
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	resp.Body.Close()
 
 	// Wait for break duration
 	time.Sleep(2 * time.Second)
 
 	// 4. End break
 	t.Log("Ending break...")
-	breakSignal.IsOnBreak = false
+	breakSignal.IsStart = false
 	breakSignal.StartTime = time.Now()
 
-	breakEndResp, err := client.SignalBreakWithResponse(ctx, breakSignal)
+	resp, err = makeRequest("POST", "/break", breakSignal)
 	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, breakEndResp.StatusCode())
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	resp.Body.Close()
 
 	// 5. Complete first task
 	t.Log("Completing first task...")
-	taskUpdate.NewStatus = apiv2.COMPLETED
+	taskUpdate.NewStatus = model.TaskStatusCompleted
 	taskUpdate.UpdateTime = time.Now()
-	taskUpdate.Notes = stringPtr("Windows installation completed")
+	taskUpdate.Notes = "Windows installation completed"
 
-	completeResp, err := client.UpdateTaskProgressWithResponse(ctx, taskUpdate)
+	resp, err = makeRequest("POST", "/task-progress", taskUpdate)
 	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, completeResp.StatusCode())
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	resp.Body.Close()
 
 	// 6. Start and complete second task
 	t.Log("Working on second task...")
-	taskUpdate.TaskId = data.tasks[1] // Use second task ID
-	taskUpdate.NewStatus = apiv2.INPROGRESS
+	taskUpdate.TaskID = data.tasks[1] // Use second task ID
+	taskUpdate.NewStatus = model.TaskStatusInProgress
 	taskUpdate.UpdateTime = time.Now()
-	taskUpdate.Notes = stringPtr("Starting door handle replacement")
+	taskUpdate.Notes = "Starting door handle replacement"
 
-	startSecondResp, err := client.UpdateTaskProgressWithResponse(ctx, taskUpdate)
+	resp, err = makeRequest("POST", "/task-progress", taskUpdate)
 	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, startSecondResp.StatusCode())
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	resp.Body.Close()
 
 	time.Sleep(2 * time.Second)
 
-	taskUpdate.NewStatus = apiv2.COMPLETED
+	taskUpdate.NewStatus = model.TaskStatusCompleted
 	taskUpdate.UpdateTime = time.Now()
-	taskUpdate.Notes = stringPtr("Door handles replaced")
+	taskUpdate.Notes = "Door handles replaced"
 
-	completeSecondResp, err := client.UpdateTaskProgressWithResponse(ctx, taskUpdate)
+	resp, err = makeRequest("POST", "/task-progress", taskUpdate)
 	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, completeSecondResp.StatusCode())
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	resp.Body.Close()
 
 	// 7. Worker Check-out
 	t.Log("Testing worker check-out...")
-	checkOutReq := apiv2.CheckOutRequest{
-		WorkerId:     apiv2.WorkerID(workerID),
+	checkOutReq := model.CheckOutRequest{
+		WorkerID:     workerID,
 		CheckOutTime: time.Now(),
-		JobSiteId:    data.jobSiteID,
-		Notes:        stringPtr("Completed all tasks for the day"),
-		Date:         time.Now(),
+		JobSiteID:    data.jobSiteID,
+		Notes:        "Completed all tasks for the day",
 	}
 
-	checkOutResp, err := client.WorkerCheckOutWithResponse(ctx, checkOutReq)
+	resp, err = makeRequest("POST", "/check-out", checkOutReq)
 	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, checkOutResp.StatusCode())
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	resp.Body.Close()
 
 	t.Log("Daily worker routine test completed successfully")
 }

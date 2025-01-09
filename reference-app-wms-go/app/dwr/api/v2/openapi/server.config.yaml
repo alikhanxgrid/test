@@ -1,5 +1,0 @@
-package: apiv2
-output: server.gen.go
-generate:
-  gin-server: true
-  models: false

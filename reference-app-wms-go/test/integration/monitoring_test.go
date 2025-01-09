@@ -1,7 +1,6 @@
 package integration
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -9,19 +8,20 @@ import (
 	"time"
 
 	"reference-app-wms-go/app/analytics"
-	apiv2 "reference-app-wms-go/app/dwr/api/v2/openapi"
+	"reference-app-wms-go/app/dwr/model"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
 
+type checkInResponse struct {
+	WorkflowID string `json:"workflowID"`
+	RunID      string `json:"runID"`
+}
+
 func TestWorkerMonitoring(t *testing.T) {
 	// Generate a proper UUID for the worker
-	workerID := uuid.New().String()
-
-	// Create API client
-	client := createJobExecutionClient(t)
-	ctx := context.Background()
+	workerID := model.WorkerID(uuid.New().String())
 
 	// Set up test data
 	t.Log("Setting up test data...")
@@ -61,7 +61,7 @@ func TestWorkerMonitoring(t *testing.T) {
 	taskReq := map[string]interface{}{
 		"name":               "Monitoring Test Task",
 		"description":        "Task for monitoring test",
-		"worker_id":          workerID,
+		"worker_id":          string(workerID),
 		"schedule_id":        schedule.ID,
 		"planned_start_time": now.Format(time.RFC3339),
 		"planned_end_time":   now.Add(2 * time.Hour).Format(time.RFC3339),
@@ -79,44 +79,56 @@ func TestWorkerMonitoring(t *testing.T) {
 
 	// 1. Check in the worker and get workflow ID
 	t.Log("Checking in worker...")
-	checkInReq := apiv2.CheckInRequest{
-		WorkerId:    apiv2.WorkerID(workerID),
+	checkInReq := model.CheckInRequest{
+		WorkerID:    workerID,
 		CheckInTime: time.Now(),
-		JobSiteId:   jobSite.ID,
-		Date:        time.Now(),
+		JobSiteID:   jobSite.ID,
 	}
 
 	// First check-in should succeed
-	checkInResp, err := client.WorkerCheckInWithResponse(ctx, checkInReq)
+	resp, err = makeRequest("POST", "/check-in", checkInReq)
 	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, checkInResp.StatusCode())
-	require.NotEmpty(t, checkInResp.JSON200.WorkflowID)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var checkInResp checkInResponse
+	err = json.NewDecoder(resp.Body).Decode(&checkInResp)
+	require.NoError(t, err)
+	require.NotEmpty(t, checkInResp.WorkflowID)
+	resp.Body.Close()
 
 	// Attempt duplicate check-in
 	t.Log("Attempting duplicate check-in...")
-	duplicateResp, err := client.WorkerCheckInWithResponse(ctx, checkInReq)
+	resp, err = makeRequest("POST", "/check-in", checkInReq)
 	require.NoError(t, err)
-	require.Equal(t, http.StatusConflict, duplicateResp.StatusCode())
-	require.Contains(t, string(duplicateResp.Body), "already checked in")
+	require.Equal(t, http.StatusConflict, resp.StatusCode)
 
-	workflowID := checkInResp.JSON200.WorkflowID
+	var errorResp struct {
+		Error string `json:"error"`
+	}
+	err = json.NewDecoder(resp.Body).Decode(&errorResp)
+	require.NoError(t, err)
+	require.Contains(t, errorResp.Error, "already checked in")
+	resp.Body.Close()
+
+	workflowID := checkInResp.WorkflowID
 
 	// After check-in
 	time.Sleep(2 * time.Second) // Increased sleep after check-in
 
 	// 2. Start a task
 	t.Log("Starting a task...")
-	taskUpdate := apiv2.TaskUpdate{
-		TaskId:     task.ID,
-		NewStatus:  apiv2.INPROGRESS,
+	taskUpdate := model.TaskUpdate{
+		TaskID:     task.ID,
+		NewStatus:  model.TaskStatusInProgress,
 		UpdateTime: time.Now(),
-		UpdatedBy:  apiv2.WorkerID(workerID),
-		Notes:      stringPtr("Starting monitoring test task"),
+		UpdatedBy:  workerID,
+		Notes:      "Starting monitoring test task",
 	}
 
-	taskUpdateResp, err := client.UpdateTaskProgressWithResponse(ctx, taskUpdate)
+	resp, err = makeRequest("POST", "/task-progress", taskUpdate)
 	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, taskUpdateResp.StatusCode())
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	resp.Body.Close()
 
 	time.Sleep(2 * time.Second) // Added sleep after task update
 
@@ -149,17 +161,18 @@ func TestWorkerMonitoring(t *testing.T) {
 
 	// 4. Mark task as blocked
 	t.Log("Marking task as blocked...")
-	taskUpdate = apiv2.TaskUpdate{
-		TaskId:     task.ID,
-		NewStatus:  apiv2.BLOCKED,
+	taskUpdate = model.TaskUpdate{
+		TaskID:     task.ID,
+		NewStatus:  model.TaskStatusBlocked,
 		UpdateTime: time.Now(),
-		UpdatedBy:  apiv2.WorkerID(workerID),
-		Notes:      stringPtr("Task blocked due to missing materials"),
+		UpdatedBy:  workerID,
+		Notes:      "Task blocked due to missing materials",
 	}
 
-	blockageResp, err := client.UpdateTaskProgressWithResponse(ctx, taskUpdate)
+	resp, err = makeRequest("POST", "/task-progress", taskUpdate)
 	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, blockageResp.StatusCode())
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	resp.Body.Close()
 
 	time.Sleep(2 * time.Second) // Added sleep after blocking task
 
@@ -178,17 +191,18 @@ func TestWorkerMonitoring(t *testing.T) {
 
 	// 6. Complete the task
 	t.Log("Completing the task...")
-	taskUpdate = apiv2.TaskUpdate{
-		TaskId:     task.ID,
-		NewStatus:  apiv2.COMPLETED,
+	taskUpdate = model.TaskUpdate{
+		TaskID:     task.ID,
+		NewStatus:  model.TaskStatusCompleted,
 		UpdateTime: time.Now(),
-		UpdatedBy:  apiv2.WorkerID(workerID),
-		Notes:      stringPtr("Task completed after resolving blockage"),
+		UpdatedBy:  workerID,
+		Notes:      "Task completed after resolving blockage",
 	}
 
-	completeResp, err := client.UpdateTaskProgressWithResponse(ctx, taskUpdate)
+	resp, err = makeRequest("POST", "/task-progress", taskUpdate)
 	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, completeResp.StatusCode())
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	resp.Body.Close()
 
 	// TODO(Abdullah): Lazy ! sleep is bad, should have a wrapper to wait for the desired state or timeout
 	time.Sleep(2 * time.Second) // Add sleep after completing task
@@ -205,17 +219,17 @@ func TestWorkerMonitoring(t *testing.T) {
 
 	// 8. Check out the worker
 	t.Log("Checking out worker...")
-	checkOutReq := apiv2.CheckOutRequest{
-		WorkerId:     apiv2.WorkerID(workerID),
+	checkOutReq := model.CheckOutRequest{
+		WorkerID:     workerID,
 		CheckOutTime: time.Now(),
-		JobSiteId:    jobSite.ID,
-		Notes:        stringPtr("Completed monitoring test"),
-		Date:         time.Now(),
+		JobSiteID:    jobSite.ID,
+		Notes:        "Completed monitoring test",
 	}
 
-	checkOutResp, err := client.WorkerCheckOutWithResponse(ctx, checkOutReq)
+	resp, err = makeRequest("POST", "/check-out", checkOutReq)
 	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, checkOutResp.StatusCode())
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	resp.Body.Close()
 
 	// 9. Verify checked out status
 	t.Log("Verifying checked out status...")
