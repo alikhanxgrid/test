@@ -1,0 +1,66 @@
+global:
+  TEMPORAL_GRPC_ENDPOINT: "temporal-frontend.temporal.svc.cluster.local:7233"
+
+wms_api:
+  replicaCount: 1
+  image:
+    repository: "alikhanxgrid/xfieldops-server"
+    tag: "latest"
+    pullPolicy: "Always"
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+  svc:
+    type: "ClusterIP"
+    port: 8080
+    
+
+wms_worker:
+  replicaCount: 1
+  image:
+    repository: "alikhanxgrid/xfieldops-worker"
+    tag: "latest"
+    pullPolicy: "Always"
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+
+# If your subchart "postgresql" expects overrides:
+postgres:
+  enabled: true
+
+  image: "postgres:14"
+  replicaCount: 1
+  containerPort: 5432
+
+  config:
+    dbName: "wms_db"
+    user: "wms_user"
+    password: "mysecretpassword"
+
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+    # A simplistic hostPath-based persistent volume (for demo)
+  # or empty to rely on dynamic provisioning.
+  persistentVolume:
+    enabled: true
+    size: 1Gi
+    hostPath: "/data/postgres"
+    storageClass: "manual"
+
+  schemaInit:
+    enabled: true

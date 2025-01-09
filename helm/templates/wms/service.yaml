@@ -9,9 +9,9 @@ metadata:
     release: {{ .Release.Name }}
     heritage: {{ .Release.Service }}
 spec:
-  type: {{ .Values.service.type }}
+  type: {{ .Values.wms_api.svc.type }}
   ports:
-    - port: {{ .Values.service.port }}
+    - port: {{ .Values.wms_api.svc.port }}
       targetPort: 8080
       protocol: TCP
       name: http

@@ -3,6 +3,7 @@ package db
 import (
 	"flag"
 	"fmt"
+	"os"
 )
 
 // DBConfig holds database connection configuration
@@ -17,11 +18,11 @@ type DBConfig struct {
 // NewDBConfigFromFlags creates a new DBConfig from command-line flags
 func NewDBConfigFromFlags() DBConfig {
 	var config DBConfig
-	flag.StringVar(&config.Host, "db-host", "localhost", "Database host")
-	flag.StringVar(&config.Port, "db-port", "5432", "Database port")
-	flag.StringVar(&config.User, "db-user", "abdullahshah", "Database user")
-	flag.StringVar(&config.Password, "db-password", "", "Database password")
-	flag.StringVar(&config.DBName, "db-name", "wms", "Database name")
+	flag.StringVar(&config.Host, "db-host", os.Getenv("DB_HOST"), "Database host")
+	flag.StringVar(&config.Port, "db-port", os.Getenv("DB_PORT"), "Database port")
+	flag.StringVar(&config.User, "db-user", os.Getenv("DB_USER"), "Database user")
+	flag.StringVar(&config.Password, "db-password", os.Getenv("DB_PASSWORD"), "Database password")
+	flag.StringVar(&config.DBName, "db-name", os.Getenv("DB_NAME"), "Database name")
 
 	// Only parse flags if they haven't been parsed yet
 	if !flag.Parsed() {

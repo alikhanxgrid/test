@@ -1,0 +1,18 @@
+{{- if .Values.postgres.enabled }}
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "reference-app-wms-go.fullname" . }}-postgres-pvc
+  labels:
+    app: {{ include "reference-app-wms-go.name" . }}
+    component: postgres
+spec:
+  storageClassName: {{ .Values.postgres.persistentVolume.storageClass | quote }}
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.postgres.persistentVolume.size | quote }}
+
+{{- end }}
