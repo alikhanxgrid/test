@@ -1,0 +1,30 @@
+{
+    "Mode": "all",
+    "OCI_CONFIG_PATH": "~/.oci/config",
+    "HOSTS": [
+        {
+            "HOST_IP": "192.168.1.1",
+            "HOST_NAME": "host1",
+            "TENANCY_LIST": [
+                "ocid1.tenancy.oc1..exampleuniqueID1",
+                "ocid1.tenancy.oc1..exampleuniqueID2"
+            ],
+            "BUCKET_NAME": "bucket1"
+        },
+        {
+            "HOST_IP": "192.168.1.2",
+            "HOST_NAME": "host2",
+            "TENANCY_LIST": [
+                "ocid1.tenancy.oc1..exampleuniqueID3"
+            ],
+            "BUCKET_NAME": "bucket2"
+        }
+    ],
+    "TARGET_INSTANCE": "instance1",
+    "TARGET_HOST": {
+        "HOST_IP": "192.168.1.1",
+        "HOST_NAME": "host1",
+        "BUCKET_COMPARTMENT_OCID": "ocid1.bucket.oc1..exampleuniqueID1",
+        "BUCKET_NAME": "bucket1"
+    }
+}

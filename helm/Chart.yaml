@@ -1,5 +1,0 @@
-apiVersion: v2
-name: reference-app-wms
-description: "reference app wms go"
-type: application
-version: 0.1.0
