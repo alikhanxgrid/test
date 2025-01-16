@@ -1,0 +1,83 @@
+name: "Oracle PCA Instance Backup (instance mode)"
+
+on:
+  workflow_dispatch:
+    inputs:
+      host-name:
+        description: "Host Name"
+        type: string
+        required: true
+        default: "iaas.pcan01.sherwin.com"
+      host-ip:
+        description: "Host IP"
+        type: string
+        required: false
+      tenancy-ocid:
+        description: "Tenancy OCID"
+        type: string
+        required: true
+      bucket-name:
+        description: "Bucket name"
+        type: string
+        required: true
+      instance-ocid:
+        description: "Instance OCID"
+        type: string
+        required: true  
+      username:
+        description: "PCA's local authentication username"
+        required: true
+        type: string
+      oci-config-profile-name:
+        description: "OCI config profile name"
+        required: false
+        type: string
+        default: "DEFAULT"
+
+jobs:
+  run-backup:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.x"
+
+      - name: Install Dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Configure OCI
+        run: |
+          mkdir -p ~/.oci
+          echo "${{ secrets.OCI_CONFIG_CONTENTS }}" > ~/.oci/config
+          echo "${{ secrets.OCI_PRIVATE_KEY }}" > ~/.oci/private.pem
+          chmod 600 ~/.oci/config
+          chmod 600 ~/.oci/private.pem
+          echo "Listing ~/.oci"
+          ls -l ~/.oci
+
+      - name: Run PCA Instance Backup
+        run: |
+          # Build a JSON object string from the multiple inputs:
+          target_host_json="{
+            \"HOST_IP\":\"${{ inputs.host-ip }}\",
+            \"HOST_NAME\":\"${{ inputs.host-name }}\",
+            \"TENANCY_OCID\":\"${{ inputs.tenancy-ocid }}\",
+            \"BUCKET_NAME\":\"${{ inputs.bucket-name }}\",
+            \"INSTANCE_OCID\":\"${{ inputs.instance-ocid }}\"
+          }"
+
+          echo "Running instance-backup in mode: instance"
+          echo "Target host JSON: $target_host_json"
+
+          python instance-backup.py \
+            --mode instance \
+            --oci-config "~/.oci/config" \
+            --target-host "$target_host_json" \
+            --username "${{ inputs.username }}" \
+            --oci-config-profile-name "${{ inputs.oci-config-profile-name }}" \
+            --password "${{ secrets.PCA_PASSWORD }}" 
