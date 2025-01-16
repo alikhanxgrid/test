@@ -1,5 +1,3 @@
-import oci
-import os
 import requests
 import logging
 from helpers import *
@@ -15,43 +13,37 @@ logger = logging.getLogger(__name__)
 
 # Export instance backup using HTTP Client
 def export_instance_backup_http(
-    instance_id,
+    instance_ocid,
     bucket_name,
     namespace_name,
-    bucket_compartment_id,
-    management_node_vip,
-    host_name,
+    management_node_name,
+    bucket_compartment_ocid,
     username,
     password,
-    tenancy="pcan01",
-    verify_cert=False
+    verify_cert,
+    management_node_vip=None,
 ):
     """
     Export instance backup using PCA's local token-based authentication.
     """
     # 1. Get a login token
     token = get_login_token(
-        management_node_vip=management_node_vip,
         username=username,
         password=password,
-        tenancy=tenancy,
-        verify_cert=verify_cert
+        verify_cert=verify_cert,
+        management_node_name=management_node_name,
+        management_node_vip=management_node_vip,
     )
-    
-    export_url = f"https://iaas.pcan01.sherwin.com/20160918/instances/{instance_id}/actions/export"
-    
+    export_url = f"https://{management_node_vip if management_node_vip else management_node_name}/20160918/instances/{instance_ocid}/actions/export"
     # 3. Build request headers with Bearer token
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {token}"
-    }
-    
+    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {token}"}
+
     # 4. Request payload for the export
     payload = {
         "bucketName": bucket_name,
         "destinationType": "objectStorageTuple",
         "namespaceName": namespace_name,
-        "compartmentId": bucket_compartment_id,
+        "compartmentId": bucket_compartment_ocid,
     }
 
     try:
@@ -59,12 +51,14 @@ def export_instance_backup_http(
             export_url,
             headers=headers,
             json=payload,
-            verify=verify_cert  # either False or path to CA cert
+            verify=verify_cert,  # either False or path to CA cert
         )
         response.raise_for_status()
-        logger.info(f"Export initiated for instance {instance_id} with status code {response.status_code}.")
+        logger.info(
+            f"Export initiated for instance {instance_ocid} with status code {response.status_code}."
+        )
     except requests.exceptions.RequestException as e:
-        logger.error(f"Failed to export instance {instance_id}: {e}")
+        logger.error(f"Failed to export instance {instance_ocid}: {e}")
         raise
 
 
@@ -77,7 +71,9 @@ def process_host(
     compute_client,
     object_storage_client,
     identity_client,
-    signer,
+    username,
+    password,
+    verify_cert,
 ):
 
     try:
@@ -88,58 +84,29 @@ def process_host(
             # Fetch namespace name for the tenancy
             namespace_name = object_storage_client.get_namespace().data
             # Ensure bucket exists
-            bucket_compartment_id = ensure_bucket_exists(
+            bucket_compartment_ocid = ensure_bucket_exists(
                 bucket_name, namespace_name, tenancy_ocid, object_storage_client
             )
             for compartment_id in compartment_ids:
                 # Fetch all running instances
-                instance_ids = get_all_instances(compute_client, compartment_id)
-                for instance_id in instance_ids:
+                instance_ocids = get_all_instances(compute_client, compartment_id)
+                for instance_ocid in instance_ocids:
                     # Export backups for all instances
                     # https://docs.oracle.com/en-us/iaas/compute-cloud-at-customer/topics/compute/creating-an-instance-backup.htm
                     export_instance_backup_http(
-                        bucket_name=bucket_name,
-                        bucket_compartment_id=bucket_compartment_id,
-                        instance_id=instance_id,
+                        management_node_name=host_name,
                         management_node_vip=host_ip,
+                        instance_ocid=instance_ocid,
+                        bucket_compartment_ocid=bucket_compartment_ocid,
+                        bucket_name=bucket_name,
                         namespace_name=namespace_name,
-                        host_name=host_name,
-                        signer=signer,
+                        username=username,
+                        password=password,
+                        verify_cert=verify_cert,
                     )
 
     except Exception as e:
         logger.error(f"Failed to process host {host_name} with IP {host_ip}: {e}")
-        raise
-
-
-# Process a single instance
-def process_single_instance(
-    instance_id,
-    bucket_name,
-    namespace_name,
-    bucket_compartment_id,
-    host_ip,
-    host_name,
-    signer,
-):
-
-    try:
-        logger.info(f"Processing single instance: {instance_id}")
-        export_instance_backup_http(
-            instance_id=instance_id,
-            bucket_name=bucket_name,
-            namespace_name=namespace_name,
-            management_node_vip=host_ip,
-            host_name=host_name,
-            bucket_compartment_id=bucket_compartment_id,
-            username="afs881",           
-            password="gvg!kga.tya4uvr*YZP", 
-            tenancy="pcan01",             # or your PCA tenancy name
-            verify_cert=False             # or "/root/.oci/pcan01.ca.crt" if you have a valid CA
-        )
-        logger.info(f"Backup process completed for instance {instance_id}.")
-    except Exception as e:
-        logger.error(f"Failed to process instance {instance_id}: {e}")
         raise
 
 
@@ -150,42 +117,64 @@ def execute_all(
     compute_client,
     object_storage_client,
     identity_client,
-    signer,
+    username,
+    password,
+    verify_cert=False,
 ):
     for host in hosts:
         process_host(
-            bucket_name=host["BUCKET_NAME"],
             host_ip=host["HOST_IP"],
             host_name=host["HOST_NAME"],
             tenancy_list=host["TENANCY_LIST"],
+            bucket_name=host["BUCKET_NAME"],
             compute_client=compute_client,
             object_storage_client=object_storage_client,
             identity_client=identity_client,
-            signer=signer,
+            username=username,
+            password=password,
+            verify_cert=verify_cert,
         )
 
 
 def execute_instance(
-    target_instance,
     target_host,
     object_storage_client,
-    signer,
+    username,
+    password,
+    verify_cert=False,
 ):
     host_ip = target_host["HOST_IP"]
-    bucket_name = target_host["BUCKET_NAME"]
     host_name = target_host["HOST_NAME"]
+    tenancy_ocid = target_host["TENANCY_OCID"]
+    bucket_name = target_host["BUCKET_NAME"]
     namespace_name = object_storage_client.get_namespace().data
-    bucket_compartment_id = target_host["BUCKET_COMPARTMENT_OCID"]
+    instance_ocid = target_host["INSTANCE_OCID"]
 
-    process_single_instance(
-        instance_id=target_instance,
-        bucket_name=bucket_name,
-        namespace_name=namespace_name,
-        host_ip=host_ip,
-        host_name=host_name,
-        bucket_compartment_id=bucket_compartment_id,
-        signer=signer,
+    bucket_compartment_ocid = ensure_bucket_exists(
+        bucket_name, namespace_name, tenancy_ocid, object_storage_client
     )
+
+    try:
+        logger.info(f"Processing single instance: {instance_ocid} on host {host_name}")
+        export_instance_backup_http(
+            instance_ocid=instance_ocid,
+            bucket_name=bucket_name,
+            namespace_name=namespace_name,
+            management_node_vip=host_ip,
+            management_node_name=host_name,
+            bucket_compartment_ocid=bucket_compartment_ocid,
+            username=username,
+            password=password,
+            verify_cert=verify_cert,
+        )
+        logger.info(
+            f"Backup process completed for instance {instance_ocid} on host {host_name}"
+        )
+    except Exception as e:
+        logger.error(
+            f"Failed to process instance {instance_ocid} on host {host_name} {e}"
+        )
+        raise
 
 
 # Main dispatch table
@@ -194,30 +183,52 @@ def main():
     # PCA site tenancy limits: https://docs.oracle.com/en/engineered-systems/private-cloud-appliance/3.0-latest/relnotes/relnotes-limits-config.html
 
     logger = get_logger()
-    # Load json data
-    json_file_path = "data.json"
-    data = load_json(json_file_path)
+    args = parse_args()
+
+    # --------------------------------------------------------
+    # Print/log the values that were passed in from the workflow
+    # --------------------------------------------------------
+    logger.info("=== CLI Arguments Received ===")
+    logger.info(f"Mode            : {args.mode}")
+    logger.info(f"OCI Config Path : {args.oci_config}")
+    logger.info(f"Hosts (JSON)    : {args.hosts}")
+    logger.info(f"Target Host JSON: {args.target_host}")
+    logger.info(f"Username        : {len(args.username)}")
+    logger.info(f"Profile Name    : {len(args.oci_config_profile_name)}")
+    logger.info("==============================")
 
     # Load values
-    mode = data.get("Mode", "all")  # Modes: "all", "instance"
-    CONFIG_PATH = data.get("OCI_CONFIG_PATH", "~/.oci/config")
-    hosts = data.get("HOSTS", [])
-    target_instance = data.get("TARGET_INSTANCE", None)
-    target_host = data.get("TARGET_HOST", None)
+    mode = args.mode  # Modes: "all", "instance"
+    CONFIG_PATH = args.oci_config
+    if args.hosts is not None:
+        hosts = json.loads(args.hosts)
+    if args.target_host is not None:
+        target_host = json.loads(args.target_host)
+    username = args.username
+    profile_name = args.oci_config_profile_name
+    password = args.password
 
     # Initialize OCI clients
     config, compute_client, object_storage_client, identity_client = initialize_clients(
-        CONFIG_PATH
+        config_path=CONFIG_PATH, profile_name=profile_name
     )
-    signer = initialize_signer(config_path=CONFIG_PATH)
+    # signer = initialize_signer(config_path=CONFIG_PATH)
 
     # Dispatch table
     dispatch = {
         "all": lambda: execute_all(
-            hosts, compute_client, object_storage_client, identity_client, signer=signer
+            compute_client=compute_client,
+            object_storage_client=object_storage_client,
+            identity_client=identity_client,
+            hosts=hosts,
+            username=username,
+            password=password,
         ),
         "instance": lambda: execute_instance(
-            target_instance, target_host, object_storage_client, signer=signer
+            target_host=target_host,
+            object_storage_client=object_storage_client,
+            username=username,
+            password=password,
         ),
     }
 

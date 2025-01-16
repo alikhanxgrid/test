@@ -1,8 +1,11 @@
+import argparse
 import logging
 import oci
 from oci import Signer
 import json
 import requests
+import re
+
 
 def get_logger():
     logging.basicConfig(
@@ -13,23 +16,78 @@ def get_logger():
     return logging.getLogger(__name__)
 
 
+def get_tenancy_name(management_node_name: str) -> str:
+    """
+    Returns whatever is between "iaas." and ".sherwin" in the input string.
+    Returns None if no match is found.
+    """
+    # Regex explanation:
+    # ^iaas\.       matches the prefix "iaas."
+    # ([^.]+)       captures one or more characters that are not a period
+    # \.sherwin     matches ".sherwin"
+    pattern = r"^iaas\.([^.]+)\.sherwin"
+    match = re.search(pattern, management_node_name)
+    if match:
+        return match.group(1)
+    else:
+        raise ValueError(f"Failed to extract tenancy name from {management_node_name}.")
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Run Oracle PCA instance backups.")
+    parser.add_argument(
+        "--mode",
+        required=True,
+        choices=["all", "instance"],
+        help="Which mode to run the script in: 'all' or 'instance'",
+    )
+    parser.add_argument(
+        "--oci-config",
+        required=True,
+        help="Path to the OCI config file (e.g., '~/.oci/config').",
+    )
+    parser.add_argument(
+        "--hosts", default=None, help="JSON string of HOSTS array (used if mode='all')."
+    )
+    parser.add_argument(
+        "--target-host",
+        default=None,
+        help="JSON string of TARGET_HOST object (used if mode='instance').",
+    )
+    parser.add_argument(
+        "--username",
+        required=False,
+        help="PCA username for token-based authentication.",
+    )
+    parser.add_argument(
+        "--oci-config-profile-name",
+        required=False,
+        help="OCI profile name for authentication.",
+    )
+    parser.add_argument(
+        "--password",
+        required=False,
+        help="PCA tenancy password for authentication.",
+    )
+    return parser.parse_args()
 
 
 def get_login_token(
-    management_node_vip,
     username: str,
     password: str,
-    tenancy: str,
-    verify_cert=False
+    management_node_name,
+    verify_cert=False,
+    management_node_vip=None,
 ) -> str:
     """
     Logs in to PCA's local authentication endpoint to obtain a Bearer token.
     """
-    login_url = f"https://iaas.pcan01.sherwin.com/20160918/login"
+    login_url = f"https://{management_node_vip if management_node_vip else management_node_name}/20160918/login"
+
     payload = {
         "username": username,
         "password": password,
-        "tenancy": tenancy
+        "tenancy": get_tenancy_name(management_node_name),
     }
     try:
         response = requests.post(login_url, json=payload, verify=verify_cert)
@@ -41,10 +99,12 @@ def get_login_token(
 
 
 # Initialize OCI Config and Clients
-def initialize_clients(config_path):
+def initialize_clients(config_path, profile_name):
     try:
         logger = get_logger()
-        config = oci.config.from_file(config_path, profile_name="pcan01")
+        config = oci.config.from_file(
+            file_location=config_path, profile_name=profile_name
+        )
         compute_client = oci.core.ComputeClient(config)
         object_storage_client = oci.object_storage.ObjectStorageClient(config)
         identity_client = oci.identity.IdentityClient(config)
