@@ -1,0 +1,289 @@
+openapi: 3.0.3
+info:
+  title: Daily Worker Routine (DWR) Job Execution API
+  description: API for managing worker check-ins, check-outs, task progress, and breaks
+  version: '2.0.0'
+
+servers:
+  - url: /api/v2
+    description: Version 2 API
+
+components:
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+      required:
+        - error
+
+    WorkerID:
+      type: string
+      description: Unique identifier for a worker
+
+    TaskStatus:
+      type: string
+      enum:
+        - PENDING
+        - IN_PROGRESS
+        - COMPLETED
+        - BLOCKED
+      description: Current status of a task
+
+    Task:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        status:
+          $ref: '#/components/schemas/TaskStatus'
+        plannedStartTime:
+          type: string
+          format: date-time
+        plannedEndTime:
+          type: string
+          format: date-time
+        location:
+          type: string
+        priority:
+          type: integer
+        blockReason:
+          type: string
+        blockedAt:
+          type: string
+          format: date-time
+        isBlocked:
+          type: boolean
+      required:
+        - id
+        - name
+        - status
+        - plannedStartTime
+        - plannedEndTime
+
+    CheckInRequest:
+      type: object
+      properties:
+        workerId:
+          $ref: '#/components/schemas/WorkerID'
+        checkInTime:
+          type: string
+          format: date-time
+        jobSiteId:
+          type: string
+        date:
+          type: string
+          format: date-time
+      required:
+        - workerId
+        - checkInTime
+        - jobSiteId
+        - date
+
+    CheckInResponse:
+      type: object
+      properties:
+        workflowID:
+          type: string
+        runID:
+          type: string
+      required:
+        - workflowID
+        - runID
+
+    CheckOutRequest:
+      type: object
+      properties:
+        workerId:
+          $ref: '#/components/schemas/WorkerID'
+        checkOutTime:
+          type: string
+          format: date-time
+        jobSiteId:
+          type: string
+        notes:
+          type: string
+        date:
+          type: string
+          format: date-time
+      required:
+        - workerId
+        - checkOutTime
+        - jobSiteId
+        - date
+
+    TaskUpdate:
+      type: object
+      properties:
+        taskId:
+          type: string
+        newStatus:
+          $ref: '#/components/schemas/TaskStatus'
+        updateTime:
+          type: string
+          format: date-time
+        notes:
+          type: string
+        updatedBy:
+          $ref: '#/components/schemas/WorkerID'
+      required:
+        - taskId
+        - newStatus
+        - updateTime
+        - updatedBy
+
+    BreakSignal:
+      type: object
+      properties:
+        workerId:
+          $ref: '#/components/schemas/WorkerID'
+        isOnBreak:
+          type: boolean
+        startTime:
+          type: string
+          format: date-time
+      required:
+        - workerId
+        - isOnBreak
+        - startTime
+
+    GenericResponse:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+paths:
+  /check-in:
+    post:
+      summary: Worker check-in endpoint
+      operationId: workerCheckIn
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckInRequest'
+      responses:
+        '200':
+          description: Successfully checked in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckInResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Worker already checked in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /check-out:
+    post:
+      summary: Worker check-out endpoint
+      operationId: workerCheckOut
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckOutRequest'
+      responses:
+        '200':
+          description: Successfully checked out
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /task-progress:
+    post:
+      summary: Update task progress
+      operationId: updateTaskProgress
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskUpdate'
+      responses:
+        '200':
+          description: Successfully updated task progress
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /break:
+    post:
+      summary: Signal worker break status
+      operationId: signalBreak
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BreakSignal'
+      responses:
+        '200':
+          description: Successfully signaled break status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error' 
