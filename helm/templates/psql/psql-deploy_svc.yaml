@@ -1,0 +1,68 @@
+{{- if .Values.postgres.enabled -}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "reference-app-wms-go.fullname" . }}-postgres
+  labels:
+    app: {{ include "reference-app-wms-go.name" . }}
+    component: postgres
+    chart: {{ include "reference-app-wms-go.chart" . }}
+    release: {{ .Release.Name }}
+spec:
+  replicas: {{ .Values.postgres.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "reference-app-wms-go.name" . }}
+      component: postgres
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "reference-app-wms-go.name" . }}
+        component: postgres
+        release: {{ .Release.Name }}
+    spec:
+      containers:
+      - name: postgres
+        image: {{ .Values.postgres.image }}
+        imagePullPolicy: IfNotPresent
+        ports:
+          - containerPort: {{ .Values.postgres.containerPort }}
+        env:
+          - name: POSTGRES_DB
+            value: {{ .Values.postgres.config.dbName | quote }}
+          - name: POSTGRES_USER
+            value: {{ .Values.postgres.config.user | quote }}
+          - name: POSTGRES_PASSWORD
+            value: {{ .Values.postgres.config.password | quote }}
+        volumeMounts:
+          - name: postgres-data
+            mountPath: /var/lib/postgresql/data
+        resources:
+{{- toYaml .Values.postgres.resources | nindent 10 }}
+      volumes:
+      - name: postgres-data
+        persistentVolumeClaim:
+          claimName: {{ include "reference-app-wms-go.fullname" . }}-postgres-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "reference-app-wms-go.fullname" . }}-postgres
+  labels:
+    app: {{ include "reference-app-wms-go.name" . }}
+    component: postgres
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.postgres.port }}
+      targetPort: {{ .Values.postgres.containerPort }}
+      protocol: TCP
+      name: postgres
+  selector:
+    app: {{ include "reference-app-wms-go.name" . }}
+    component: postgres
+
+{{- end }}

@@ -1,0 +1,20 @@
+{{- if and .Values.postgres.enabled .Values.postgres.persistentVolume.enabled }}
+
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ include "reference-app-wms-go.fullname" . }}-postgres-pv
+  labels:
+    app: {{ include "reference-app-wms-go.name" . }}
+    component: postgres
+spec:
+  capacity:
+    storage: {{ .Values.postgres.persistentVolume.size | quote }}
+  accessModes:
+    - {{ .Values.postgres.persistentVolume.accessModes | quote }}
+  storageClassName: {{ .Values.postgres.persistentVolume.storageClass | quote }}
+  hostPath:
+    path: {{ .Values.postgres.persistentVolume.hostPath | quote }}
+  persistentVolumeReclaimPolicy: Retain
+
+{{- end }}

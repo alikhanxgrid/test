@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "reference-app-wms-go.fullname" . }}-api
+  labels:
+    app: {{ include "reference-app-wms-go.name" . }}
+    component: api
+    chart: {{ include "reference-app-wms-go.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  type: {{ .Values.wms_api.svc.type }}
+  ports:
+    - port: {{ .Values.wms_api.svc.port }}
+      targetPort: 8081
+      protocol: TCP
+      name: http
+  selector:
+    app: {{ include "reference-app-wms-go.name" . }}
+    component: api
+    release: {{ .Release.Name }}
