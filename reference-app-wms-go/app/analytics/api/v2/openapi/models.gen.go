@@ -164,8 +164,8 @@ type WorkerUtilizationMetrics struct {
 
 // GetSiteProductivityParams defines parameters for GetSiteProductivity.
 type GetSiteProductivityParams struct {
-	Start *openapi_types.Date `form:"start,omitempty" json:"start,omitempty"`
-	End   *openapi_types.Date `form:"end,omitempty" json:"end,omitempty"`
+	Start openapi_types.Date `form:"start" json:"start"`
+	End   openapi_types.Date `form:"end" json:"end"`
 }
 
 // GetSiteTaskDistributionParams defines parameters for GetSiteTaskDistribution.

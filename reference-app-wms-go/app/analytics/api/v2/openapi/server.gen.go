@@ -65,17 +65,31 @@ func (siw *ServerInterfaceWrapper) GetSiteProductivity(c *gin.Context) {
 	// Parameter object where we will unmarshal all parameters from the context
 	var params GetSiteProductivityParams
 
-	// ------------- Optional query parameter "start" -------------
+	// ------------- Required query parameter "start" -------------
 
-	err = runtime.BindQueryParameter("form", true, false, "start", c.Request.URL.Query(), &params.Start)
+	if paramValue := c.Query("start"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandler(c, fmt.Errorf("Query argument start is required, but not found"), http.StatusBadRequest)
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "start", c.Request.URL.Query(), &params.Start)
 	if err != nil {
 		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter start: %w", err), http.StatusBadRequest)
 		return
 	}
 
-	// ------------- Optional query parameter "end" -------------
+	// ------------- Required query parameter "end" -------------
 
-	err = runtime.BindQueryParameter("form", true, false, "end", c.Request.URL.Query(), &params.End)
+	if paramValue := c.Query("end"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandler(c, fmt.Errorf("Query argument end is required, but not found"), http.StatusBadRequest)
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "end", c.Request.URL.Query(), &params.End)
 	if err != nil {
 		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter end: %w", err), http.StatusBadRequest)
 		return
