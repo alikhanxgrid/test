@@ -4,8 +4,6 @@
 package apiv2
 
 import (
-	"time"
-
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
@@ -16,11 +14,11 @@ type Error struct {
 
 // HistoricalTaskInfo defines model for HistoricalTaskInfo.
 type HistoricalTaskInfo struct {
-	Id               *string    `json:"id,omitempty"`
-	Name             *string    `json:"name,omitempty"`
-	PlannedEndTime   *time.Time `json:"plannedEndTime,omitempty"`
-	PlannedStartTime *time.Time `json:"plannedStartTime,omitempty"`
-	Status           *string    `json:"status,omitempty"`
+	Id               *string             `json:"id,omitempty"`
+	Name             *string             `json:"name,omitempty"`
+	PlannedEndTime   *openapi_types.Date `json:"plannedEndTime,omitempty"`
+	PlannedStartTime *openapi_types.Date `json:"plannedStartTime,omitempty"`
+	Status           *string             `json:"status,omitempty"`
 }
 
 // ProductivityStats defines model for ProductivityStats.

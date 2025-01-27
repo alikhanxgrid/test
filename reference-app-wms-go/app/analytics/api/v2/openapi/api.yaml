@@ -120,10 +120,10 @@ components:
           type: string
         plannedStartTime:
           type: string
-          format: date-time
+          format: date
         plannedEndTime:
           type: string
-          format: date-time
+          format: date
 
     WorkerUtilizationMetrics:
       type: object
@@ -205,9 +205,36 @@ components:
       properties:
         jobSite:
           type: string
+        startDate:
+          type: string
+          format: date-time
+        endDate:
+          type: string
+          format: date-time
         workerStats:
           type: object
-          description: "Key = workerID, Value = stats"
+          additionalProperties:
+            $ref: '#/components/schemas/WorkerStats'
+      required:
+        - jobSite
+        - workerStats
+
+    WorkerStats:
+      type: object
+      properties:
+        totalTasks:
+          type: integer
+        completedTasks:
+          type: integer
+        activeTime:
+          type: string
+          description: "Duration in ISO 8601 format"
+        efficiency:
+          type: number
+          format: float
+      required:
+        - totalTasks
+        - completedTasks
 
 paths:
   /workflow/{workflowID}/tasks:
