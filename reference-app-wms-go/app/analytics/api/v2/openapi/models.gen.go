@@ -4,7 +4,17 @@
 package apiv2
 
 import (
+	"time"
+
 	openapi_types "github.com/oapi-codegen/runtime/types"
+)
+
+// Defines values for TaskStatus.
+const (
+	BLOCKED    TaskStatus = "BLOCKED"
+	COMPLETED  TaskStatus = "COMPLETED"
+	INPROGRESS TaskStatus = "IN_PROGRESS"
+	PENDING    TaskStatus = "PENDING"
 )
 
 // Error defines model for Error.
@@ -14,29 +24,32 @@ type Error struct {
 
 // HistoricalTaskInfo defines model for HistoricalTaskInfo.
 type HistoricalTaskInfo struct {
-	Id               *string             `json:"id,omitempty"`
-	Name             *string             `json:"name,omitempty"`
-	PlannedEndTime   *openapi_types.Date `json:"plannedEndTime,omitempty"`
-	PlannedStartTime *openapi_types.Date `json:"plannedStartTime,omitempty"`
-	Status           *string             `json:"status,omitempty"`
+	CreatedAt        *time.Time `json:"createdAt,omitempty"`
+	Description      *string    `json:"description,omitempty"`
+	Id               *string    `json:"id,omitempty"`
+	JobSiteId        *string    `json:"jobSiteId,omitempty"`
+	Name             *string    `json:"name,omitempty"`
+	PlannedEndTime   *time.Time `json:"plannedEndTime,omitempty"`
+	PlannedStartTime *time.Time `json:"plannedStartTime,omitempty"`
+	Status           *string    `json:"status,omitempty"`
+	UpdatedAt        *time.Time `json:"updatedAt,omitempty"`
 }
 
 // ProductivityStats defines model for ProductivityStats.
 type ProductivityStats struct {
-	// AvgCompletionTime Duration (e.g., 1h23m)
-	AvgCompletionTime *string `json:"avgCompletionTime,omitempty"`
-	BlockedTasks      *int    `json:"blockedTasks,omitempty"`
-	CompletedTasks    *int    `json:"completedTasks,omitempty"`
-
-	// CompletionRate 0.0 to 1.0
-	CompletionRate *float32 `json:"completionRate,omitempty"`
-	TotalTasks     *int     `json:"totalTasks,omitempty"`
+	AvgCompletionTime *string  `json:"avgCompletionTime,omitempty"`
+	BlockedTasks      *int     `json:"blockedTasks,omitempty"`
+	CompletedTasks    *int     `json:"completedTasks,omitempty"`
+	CompletionRate    *float64 `json:"completionRate,omitempty"`
+	TotalTasks        *int     `json:"totalTasks,omitempty"`
 }
 
 // SiteProductivityMetrics defines model for SiteProductivityMetrics.
 type SiteProductivityMetrics struct {
 	DailyStats *map[string]SiteProductivityStats `json:"dailyStats,omitempty"`
+	EndDate    *time.Time                        `json:"endDate,omitempty"`
 	JobSite    *string                           `json:"jobSite,omitempty"`
+	StartDate  *time.Time                        `json:"startDate,omitempty"`
 }
 
 // SiteProductivityStats defines model for SiteProductivityStats.
@@ -45,31 +58,37 @@ type SiteProductivityStats struct {
 	AvgCompletionTime *string  `json:"avgCompletionTime,omitempty"`
 	BlockedTasks      *int     `json:"blockedTasks,omitempty"`
 	CompletedTasks    *int     `json:"completedTasks,omitempty"`
-	CompletionRate    *float32 `json:"completionRate,omitempty"`
+	CompletionRate    *float64 `json:"completionRate,omitempty"`
 	TotalTasks        *int     `json:"totalTasks,omitempty"`
 }
 
 // SiteTaskDistribution defines model for SiteTaskDistribution.
 type SiteTaskDistribution struct {
-	JobSite *string `json:"jobSite,omitempty"`
-
-	// WorkerStats Key = workerID, Value = stats
-	WorkerStats *map[string]interface{} `json:"workerStats,omitempty"`
+	EndDate     *time.Time                  `json:"endDate,omitempty"`
+	JobSite     *string                     `json:"jobSite,omitempty"`
+	StartDate   *time.Time                  `json:"startDate,omitempty"`
+	WorkerStats *map[string]WorkerTaskStats `json:"workerStats,omitempty"`
 }
 
 // SiteUtilizationMetrics defines model for SiteUtilizationMetrics.
 type SiteUtilizationMetrics struct {
+	Date    *time.Time            `json:"date,omitempty"`
 	JobSite *string               `json:"jobSite,omitempty"`
 	Stats   *SiteUtilizationStats `json:"stats,omitempty"`
 }
 
 // SiteUtilizationStats defines model for SiteUtilizationStats.
 type SiteUtilizationStats struct {
-	AvgWorkDuration     *string  `json:"avgWorkDuration,omitempty"`
-	LateWorkers         *int     `json:"lateWorkers,omitempty"`
-	OnTimeWorkers       *int     `json:"onTimeWorkers,omitempty"`
-	SiteUtilizationRate *float32 `json:"siteUtilizationRate,omitempty"`
-	TotalWorkers        *int     `json:"totalWorkers,omitempty"`
+	AvgWorkDuration      *string         `json:"avgWorkDuration,omitempty"`
+	CheckInDistribution  *map[string]int `json:"checkInDistribution,omitempty"`
+	CheckOutDistribution *map[string]int `json:"checkOutDistribution,omitempty"`
+	CompletedTasks       *int            `json:"completedTasks,omitempty"`
+	LateWorkers          *int            `json:"lateWorkers,omitempty"`
+	OnTimeWorkers        *int            `json:"onTimeWorkers,omitempty"`
+	SiteUtilizationRate  *float64        `json:"siteUtilizationRate,omitempty"`
+	TotalActiveTime      *string         `json:"totalActiveTime,omitempty"`
+	TotalTasks           *int            `json:"totalTasks,omitempty"`
+	TotalWorkers         *int            `json:"totalWorkers,omitempty"`
 }
 
 // TaskBlockageInfo defines model for TaskBlockageInfo.
@@ -83,43 +102,53 @@ type TaskBlockageInfo struct {
 
 // TaskInfo defines model for TaskInfo.
 type TaskInfo struct {
-	BlockReason *string `json:"blockReason,omitempty"`
-	IsBlocked   *bool   `json:"isBlocked,omitempty"`
-
-	// StartedAt Unix timestamp when task started
-	StartedAt *int64 `json:"startedAt,omitempty"`
-
-	// Status Task status (PENDING, IN_PROGRESS, BLOCKED, COMPLETED)
-	Status *string `json:"status,omitempty"`
-	TaskId *string `json:"taskId,omitempty"`
+	BlockReason *string     `json:"blockReason,omitempty"`
+	IsBlocked   *bool       `json:"isBlocked,omitempty"`
+	StartedAt   *int64      `json:"startedAt,omitempty"`
+	Status      *TaskStatus `json:"status,omitempty"`
+	TaskId      *string     `json:"taskId,omitempty"`
 }
+
+// TaskStatus defines model for TaskStatus.
+type TaskStatus string
 
 // UtilizationStats defines model for UtilizationStats.
 type UtilizationStats struct {
-	// ActiveTime Duration
-	ActiveTime     *string `json:"activeTime,omitempty"`
-	CompletedTasks *int    `json:"completedTasks,omitempty"`
-	TotalTasks     *int    `json:"totalTasks,omitempty"`
-
-	// TotalTime Duration
+	ActiveTime      *string  `json:"activeTime,omitempty"`
+	CompletedTasks  *int     `json:"completedTasks,omitempty"`
+	TotalTasks      *int     `json:"totalTasks,omitempty"`
 	TotalTime       *string  `json:"totalTime,omitempty"`
-	UtilizationRate *float32 `json:"utilizationRate,omitempty"`
+	UtilizationRate *float64 `json:"utilizationRate,omitempty"`
 }
 
 // WorkerProductivityMetrics defines model for WorkerProductivityMetrics.
 type WorkerProductivityMetrics struct {
 	DailyStats *map[string]ProductivityStats `json:"dailyStats,omitempty"`
+	EndDate    *time.Time                    `json:"endDate,omitempty"`
+	StartDate  *time.Time                    `json:"startDate,omitempty"`
 	WorkerId   *string                       `json:"workerId,omitempty"`
 }
 
 // WorkerTaskHistory defines model for WorkerTaskHistory.
 type WorkerTaskHistory struct {
-	Tasks    *[]HistoricalTaskInfo `json:"tasks,omitempty"`
-	WorkerId *string               `json:"workerId,omitempty"`
+	EndDate   *time.Time            `json:"endDate,omitempty"`
+	StartDate *time.Time            `json:"startDate,omitempty"`
+	Tasks     *[]HistoricalTaskInfo `json:"tasks,omitempty"`
+	WorkerId  *string               `json:"workerId,omitempty"`
+}
+
+// WorkerTaskStats defines model for WorkerTaskStats.
+type WorkerTaskStats struct {
+	AvgTaskDuration *string  `json:"avgTaskDuration,omitempty"`
+	BlockedTasks    *int     `json:"blockedTasks,omitempty"`
+	CompletedTasks  *int     `json:"completedTasks,omitempty"`
+	CompletionRate  *float64 `json:"completionRate,omitempty"`
+	TotalTasks      *int     `json:"totalTasks,omitempty"`
 }
 
 // WorkerTaskStatus defines model for WorkerTaskStatus.
 type WorkerTaskStatus struct {
+	// CurrentSite Job site ID where the worker is currently working
 	CurrentSite     string     `json:"currentSite"`
 	CurrentTasks    []TaskInfo `json:"currentTasks"`
 	IsOnBreak       bool       `json:"isOnBreak"`
@@ -128,8 +157,9 @@ type WorkerTaskStatus struct {
 
 // WorkerUtilizationMetrics defines model for WorkerUtilizationMetrics.
 type WorkerUtilizationMetrics struct {
+	Date     time.Time         `json:"date"`
 	Stats    *UtilizationStats `json:"stats,omitempty"`
-	WorkerId *string           `json:"workerId,omitempty"`
+	WorkerId string            `json:"workerId"`
 }
 
 // GetSiteProductivityParams defines parameters for GetSiteProductivity.

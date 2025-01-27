@@ -757,6 +757,7 @@ type GetSiteProductivityResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *SiteProductivityMetrics
 	JSON400      *Error
+	JSON500      *Error
 }
 
 // Status returns HTTPResponse.Status
@@ -780,6 +781,7 @@ type GetSiteTaskDistributionResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *SiteTaskDistribution
 	JSON400      *Error
+	JSON500      *Error
 }
 
 // Status returns HTTPResponse.Status
@@ -803,6 +805,7 @@ type GetSiteUtilizationResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *SiteUtilizationMetrics
 	JSON400      *Error
+	JSON500      *Error
 }
 
 // Status returns HTTPResponse.Status
@@ -826,6 +829,7 @@ type GetWorkerTaskHistoryResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *WorkerTaskHistory
 	JSON400      *Error
+	JSON500      *Error
 }
 
 // Status returns HTTPResponse.Status
@@ -849,6 +853,7 @@ type GetWorkerProductivityResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *WorkerProductivityMetrics
 	JSON400      *Error
+	JSON500      *Error
 }
 
 // Status returns HTTPResponse.Status
@@ -872,6 +877,7 @@ type GetWorkerUtilizationResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *WorkerUtilizationMetrics
 	JSON400      *Error
+	JSON500      *Error
 }
 
 // Status returns HTTPResponse.Status
@@ -1038,6 +1044,13 @@ func ParseGetSiteProductivityResponse(rsp *http.Response) (*GetSiteProductivityR
 		}
 		response.JSON400 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
 	}
 
 	return response, nil
@@ -1070,6 +1083,13 @@ func ParseGetSiteTaskDistributionResponse(rsp *http.Response) (*GetSiteTaskDistr
 			return nil, err
 		}
 		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
 
 	}
 
@@ -1104,6 +1124,13 @@ func ParseGetSiteUtilizationResponse(rsp *http.Response) (*GetSiteUtilizationRes
 		}
 		response.JSON400 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
 	}
 
 	return response, nil
@@ -1136,6 +1163,13 @@ func ParseGetWorkerTaskHistoryResponse(rsp *http.Response) (*GetWorkerTaskHistor
 			return nil, err
 		}
 		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
 
 	}
 
@@ -1170,6 +1204,13 @@ func ParseGetWorkerProductivityResponse(rsp *http.Response) (*GetWorkerProductiv
 		}
 		response.JSON400 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
 	}
 
 	return response, nil
@@ -1202,6 +1243,13 @@ func ParseGetWorkerUtilizationResponse(rsp *http.Response) (*GetWorkerUtilizatio
 			return nil, err
 		}
 		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
 
 	}
 
