@@ -1,0 +1,4 @@
+package: openapi
+output: models.gen.go
+generate:
+  - types  # Only generate data types/models
