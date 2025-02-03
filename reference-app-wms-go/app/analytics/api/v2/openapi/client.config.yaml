@@ -1,0 +1,6 @@
+package: apiv2
+output: client.gen.go
+generate:
+  client: true
+  models: false
+

@@ -1,0 +1,683 @@
+openapi: 3.0.3
+info:
+  title: WMS Analytics API
+  description: API endpoints for real-time and historical analytics of tasks, workers, and sites
+  version: "2.0.0"
+
+servers:
+  - url: /api/v2/analytics
+    description: Version 2 API
+
+components:
+  schemas:
+    # Generic error model
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    JobSite:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        location:
+          type: string
+
+    WorkerTaskStatus:
+      type: object
+      properties:
+        isSessionActive:
+          type: boolean
+        isOnBreak:
+          type: boolean
+        currentSite:
+          type: string
+          description: Job site ID where the worker is currently working
+        currentTasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaskInfo'
+      required:
+        - isSessionActive
+        - isOnBreak
+        - currentSite
+        - currentTasks
+
+    TaskInfo:
+      type: object
+      properties:
+        taskId:
+          type: string
+        status:
+          $ref: '#/components/schemas/TaskStatus'
+        startedAt:
+          type: integer
+          format: int64
+        isBlocked:
+          type: boolean
+        blockReason:
+          type: string
+
+    TaskBlockageInfo:
+      type: object
+      properties:
+        isBlocked:
+          type: boolean
+        blockReason:
+          type: string
+        since:
+          type: integer
+          format: int64
+          description: "Unix timestamp since the task got blocked"
+      required:
+        - isBlocked
+        - since
+
+    TaskStatus:
+      type: string
+      enum:
+        - PENDING
+        - IN_PROGRESS
+        - BLOCKED
+        - COMPLETED
+
+    TaskStatusDistribution:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date-time
+        jobSite:
+          type: string
+        statuses:
+          type: object
+          additionalProperties:
+            type: integer
+
+    DailyTaskStats:
+      type: object
+      properties:
+        statusCounts:
+          type: object
+          additionalProperties:
+            type: integer
+        durations:
+          type: object
+          additionalProperties:
+            type: number
+            format: double
+
+    TaskTrendMetrics:
+      type: object
+      properties:
+        jobSite:
+          type: string
+        startDate:
+          type: string
+          format: date-time
+        endDate:
+          type: string
+          format: date-time
+        dailyStats:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/DailyTaskStats'
+
+    BlockageStats:
+      type: object
+      properties:
+        count:
+          type: integer
+        avgDuration:
+          type: string
+          format: duration
+
+    BlockageTrendMetrics:
+      type: object
+      properties:
+        jobSite:
+          type: string
+        startDate:
+          type: string
+          format: date-time
+        endDate:
+          type: string
+          format: date-time
+        dailyStats:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/BlockageStats'
+
+    ProductivityStats:
+      type: object
+      properties:
+        totalTasks:
+          type: integer
+        completedTasks:
+          type: integer
+        blockedTasks:
+          type: integer
+        avgCompletionTime:
+          type: string
+          format: duration
+        completionRate:
+          type: number
+          format: double
+
+    WorkerProductivityMetrics:
+      type: object
+      properties:
+        workerId:
+          type: string
+        startDate:
+          type: string
+          format: date-time
+        endDate:
+          type: string
+          format: date-time
+        dailyStats:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/ProductivityStats'
+
+    HistoricalTaskInfo:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+        plannedStartTime:
+          type: string
+          format: date-time
+        plannedEndTime:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        jobSiteId:
+          type: string
+
+    WorkerTaskHistory:
+      type: object
+      properties:
+        workerId:
+          type: string
+        startDate:
+          type: string
+          format: date-time
+        endDate:
+          type: string
+          format: date-time
+        tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/HistoricalTaskInfo'
+
+    UtilizationStats:
+      type: object
+      properties:
+        totalTime:
+          type: string
+          format: duration
+        totalTasks:
+          type: integer
+        completedTasks:
+          type: integer
+        activeTime:
+          type: string
+          format: duration
+        utilizationRate:
+          type: number
+          format: double
+
+    WorkerUtilizationMetrics:
+      type: object
+      properties:
+        workerId:
+          type: string
+        date:
+          type: string
+          format: date-time
+        stats:
+          $ref: '#/components/schemas/UtilizationStats'
+      required:
+        - workerId
+        - date
+
+    SiteProductivityStats:
+      type: object
+      properties:
+        activeWorkers:
+          type: integer
+        totalTasks:
+          type: integer
+        completedTasks:
+          type: integer
+        blockedTasks:
+          type: integer
+        avgCompletionTime:
+          type: string
+          format: duration
+        completionRate:
+          type: number
+          format: double
+
+    SiteProductivityMetrics:
+      type: object
+      properties:
+        jobSite:
+          type: string
+        startDate:
+          type: string
+          format: date-time
+        endDate:
+          type: string
+          format: date-time
+        dailyStats:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/SiteProductivityStats'
+
+    SiteUtilizationStats:
+      type: object
+      properties:
+        totalWorkers:
+          type: integer
+        onTimeWorkers:
+          type: integer
+        lateWorkers:
+          type: integer
+        avgWorkDuration:
+          type: string
+          format: duration
+        totalTasks:
+          type: integer
+        completedTasks:
+          type: integer
+        totalActiveTime:
+          type: string
+          format: duration
+        siteUtilizationRate:
+          type: number
+          format: double
+        checkInDistribution:
+          type: object
+          additionalProperties:
+            type: integer
+        checkOutDistribution:
+          type: object
+          additionalProperties:
+            type: integer
+
+    SiteUtilizationMetrics:
+      type: object
+      properties:
+        jobSite:
+          type: string
+        date:
+          type: string
+          format: date-time
+        stats:
+          $ref: '#/components/schemas/SiteUtilizationStats'
+
+    WorkerTaskStats:
+      type: object
+      properties:
+        totalTasks:
+          type: integer
+        completedTasks:
+          type: integer
+        blockedTasks:
+          type: integer
+        avgTaskDuration:
+          type: string
+          format: duration
+        completionRate:
+          type: number
+          format: double
+
+    SiteTaskDistribution:
+      type: object
+      properties:
+        jobSite:
+          type: string
+        startDate:
+          type: string
+          format: date-time
+        endDate:
+          type: string
+          format: date-time
+        workerStats:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/WorkerTaskStats'
+
+    BreakMetrics:
+      type: object
+      properties:
+        totalBreaks:
+          type: integer
+        averageBreakDuration:
+          type: string
+          format: duration
+        breakDistribution:
+          type: object
+          additionalProperties:
+            type: integer
+        complianceRate:
+          type: number
+          format: double
+
+paths:
+  /workflow/{workflowID}/tasks:
+    get:
+      summary: Get current tasks for a workflow
+      operationId: getWorkerCurrentTasks
+      parameters:
+        - name: workflowID
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successfully retrieved worker tasks
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkerTaskStatus'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /workflow/{workflowID}/tasks/{taskID}/blockage:
+    get:
+      summary: Get blockage status for a specific task
+      operationId: getTaskBlockageStatus
+      parameters:
+        - name: workflowID
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: taskID
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successfully retrieved task blockage
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskBlockageInfo'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+
+  /workers/{workerID}/productivity:
+    get:
+      summary: Get worker productivity metrics
+      operationId: getWorkerProductivity
+      parameters:
+        - name: workerID
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: start
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: end
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Successfully retrieved worker productivity
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkerProductivityMetrics'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /workers/{workerID}/history:
+    get:
+      summary: Get worker task history
+      operationId: getWorkerTaskHistory
+      parameters:
+        - name: workerID
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: start
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: end
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Successfully retrieved worker task history
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkerTaskHistory'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /workers/{workerID}/utilization:
+    get:
+      summary: Get worker utilization metrics
+      operationId: getWorkerUtilization
+      parameters:
+        - name: workerID
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: date
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Successfully retrieved worker utilization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkerUtilizationMetrics'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /sites/{siteID}/productivity:
+    get:
+      summary: Get site productivity metrics
+      operationId: getSiteProductivity
+      parameters:
+        - name: siteID
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: start
+          required: true
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: end
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Successfully retrieved site productivity
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SiteProductivityMetrics'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /sites/{siteID}/utilization:
+    get:
+      summary: Get site utilization metrics
+      operationId: getSiteUtilization
+      parameters:
+        - name: siteID
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: date
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Successfully retrieved site utilization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SiteUtilizationMetrics'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /sites/{siteID}/tasks:
+    get:
+      summary: Get site task distribution
+      operationId: getSiteTaskDistribution
+      parameters:
+        - name: siteID
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: start
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: end
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Successfully retrieved task distribution
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SiteTaskDistribution'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'

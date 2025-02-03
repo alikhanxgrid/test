@@ -1,0 +1,87 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:14
+    container_name: wms_db
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=wms_user
+      - POSTGRES_PASSWORD=mysecretpassword
+      - POSTGRES_DB=wms_db
+    volumes:
+      # Persist DB data locally
+      - wms_db_data:/var/lib/postgresql/data
+      # Copy the WMS schema into init scripts so it runs automatically at container start
+      - ./reference-app-wms-go/app/db/schema.sql:/docker-entrypoint-initdb.d/1_schema.sql:ro
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "wms_user"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  temporal:
+    image: temporalio/auto-setup:1.20
+    container_name: temporal
+    depends_on:
+      - db
+    environment:
+      # Use Postgres as DB
+      - DB=postgres
+      # Point to the same DB container
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=wms_user
+      - POSTGRES_PWD=mysecretpassword
+      # IMPORTANT: We'll store Temporal’s schema in the *same* DB (wms_db).
+      - POSTGRES_DB=wms_db
+
+      # This is optional; if you need advanced config, you can add more env vars.
+      # - DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development.yaml
+    ports:
+      # Temporal gRPC Frontend
+      - "7233:7233"
+      # Temporal Web UI
+      - "8080:8080"
+
+  wms-server:
+    container_name: wms_server
+    build:
+      context: .
+      dockerfile: reference-app-wms-go/docker/Dockerfile.server
+    depends_on:
+      - db
+      - temporal
+    ports:
+      - "8081:8081"
+    environment:
+      # Point the WMS to the same Postgres DB
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=wms_user
+      - DB_PASSWORD=mysecretpassword
+      - DB_NAME=wms_db
+
+      # Point to the Temporal server’s gRPC endpoint
+      - TEMPORAL_GRPC_ENDPOINT=temporal:7233
+
+  wms-worker:
+    container_name: wms_worker
+    build:
+      context: .
+      dockerfile: reference-app-wms-go/docker/Dockerfile.worker
+    depends_on:
+      - db
+      - temporal
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=wms_user
+      - DB_PASSWORD=mysecretpassword
+      - DB_NAME=wms_db
+      - TEMPORAL_GRPC_ENDPOINT=temporal:7233
+
+volumes:
+  wms_db_data:
+    external: false

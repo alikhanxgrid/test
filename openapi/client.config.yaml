@@ -1,4 +1,0 @@
-package: openapi
-output: client.gen.go
-generate:
-  - client  # Generate a Go client

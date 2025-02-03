@@ -1,4 +1,0 @@
-package: openapi
-output: server.gen.go
-generate:
-  - gin  # Generate a Gin server
