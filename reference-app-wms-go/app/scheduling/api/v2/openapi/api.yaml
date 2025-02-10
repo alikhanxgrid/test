@@ -1,0 +1,745 @@
+openapi: 3.0.3
+info:
+  title: WMS Scheduling API
+  description: API endpoints for managing job sites, schedules, tasks, and worker attendance
+  version: "2.0.0"
+
+servers:
+  - url: /api/v2/scheduling
+    description: Version 2 Scheduling API
+
+components:
+  schemas:
+    # Generic error model
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    # Basic representation of a job site
+    JobSite:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        location:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    # Basic representation of a schedule
+    Schedule:
+      type: object
+      properties:
+        id:
+          type: string
+        jobSiteId:
+          type: string
+        startDate:
+          type: string
+          format: date-time
+        endDate:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    # Basic representation of a task
+    Task:
+      type: object
+      properties:
+        id:
+          type: string
+        scheduleId:
+          type: string
+        workerId:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        plannedStartTime:
+          type: string
+          format: date-time
+        plannedEndTime:
+          type: string
+          format: date-time
+        status:
+          type: string
+          description: "Current task status (PENDING, IN_PROGRESS, BLOCKED, COMPLETED)"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    # Basic representation of worker attendance
+    WorkerAttendance:
+      type: object
+      properties:
+        workerId:
+          type: string
+        jobSiteId:
+          type: string
+        date:
+          type: string
+          format: date
+        checkInTime:
+          type: string
+          format: date-time
+        checkOutTime:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    # Request body for creating a job site
+    CreateJobSiteRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        location:
+          type: string
+      required:
+        - name
+        - location
+
+    # Request body for creating a schedule
+    CreateScheduleRequest:
+      type: object
+      properties:
+        id:
+          type: string
+          description: "Optional schedule ID. If omitted, one will be generated."
+        startDate:
+          type: string
+          format: date-time
+        endDate:
+          type: string
+          format: date-time
+      required:
+        - startDate
+        - endDate
+
+    # Request body for validating schedule overlap
+    ValidateScheduleRequest:
+      type: object
+      properties:
+        startDate:
+          type: string
+          format: date-time
+        endDate:
+          type: string
+          format: date-time
+      required:
+        - startDate
+        - endDate
+
+    # Request body for creating a task
+    CreateTaskRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        scheduleId:
+          type: string
+        workerId:
+          type: string
+        plannedStartTime:
+          type: string
+          format: date-time
+        plannedEndTime:
+          type: string
+          format: date-time
+      required:
+        - name
+        - description
+        - scheduleId
+        - workerId
+        - plannedStartTime
+        - plannedEndTime
+
+    # Request body for updating a task's status
+    UpdateTaskStatusRequest:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    # Request body for recording attendance
+    RecordAttendanceRequest:
+      type: object
+      properties:
+        jobSiteId:
+          type: string
+        checkInTime:
+          type: string
+          format: date-time
+      required:
+        - jobSiteId
+        - checkInTime
+
+    # Request body for updating attendance
+    UpdateAttendanceRequest:
+      type: object
+      properties:
+        jobSiteId:
+          type: string
+        date:
+          type: string
+          format: date
+        checkOutTime:
+          type: string
+          format: date-time
+      required:
+        - jobSiteId
+        - date
+        - checkOutTime
+
+paths:
+
+  ###########################
+  #  JOB SITE ENDPOINTS     #
+  ###########################
+
+  /job-sites:
+    post:
+      summary: Create a new job site
+      operationId: createJobSite
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateJobSiteRequest'
+      responses:
+        '201':
+          description: Successfully created job site
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobSite'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /job-sites/{siteID}:
+    get:
+      summary: Get a job site by ID
+      operationId: getJobSite
+      parameters:
+        - name: siteID
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successfully retrieved job site
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobSite'
+        '404':
+          description: Job site not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+
+  ###########################
+  #    SCHEDULE ENDPOINTS   #
+  ###########################
+
+  /job-sites/{siteID}/schedules:
+    post:
+      summary: Create a new schedule for a job site
+      operationId: createSchedule
+      parameters:
+        - name: siteID
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateScheduleRequest'
+      responses:
+        '201':
+          description: Successfully created schedule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Schedule'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Overlapping schedule conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    get:
+      summary: Get all schedules for a job site
+      operationId: getSchedules
+      parameters:
+        - name: siteID
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of schedules
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Schedule'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /job-sites/{siteID}/schedules/active:
+    get:
+      summary: Get currently active schedules for a job site
+      operationId: getActiveSchedules
+      parameters:
+        - name: siteID
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of active schedules
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Schedule'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /job-sites/{siteID}/schedules/upcoming:
+    get:
+      summary: Get upcoming schedules for a job site
+      operationId: getUpcomingSchedules
+      parameters:
+        - name: siteID
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of upcoming schedules
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Schedule'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /job-sites/{siteID}/schedules/validate:
+    post:
+      summary: Validate schedule overlap
+      operationId: validateScheduleOverlap
+      parameters:
+        - name: siteID
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ValidateScheduleRequest'
+      responses:
+        '200':
+          description: No overlap
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  valid:
+                    type: boolean
+        '409':
+          description: Overlapping schedule conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /schedules/{scheduleID}:
+    get:
+      summary: Get a schedule by ID
+      operationId: getScheduleById
+      parameters:
+        - name: scheduleID
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successfully retrieved schedule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Schedule'
+        '404':
+          description: Schedule not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+
+  ###########################
+  #    TASK ENDPOINTS       #
+  ###########################
+
+  /job-sites/{siteID}/tasks:
+    post:
+      summary: Create a new task under a schedule for a job site
+      operationId: createTask
+      parameters:
+        - name: siteID
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTaskRequest'
+      responses:
+        '201':
+          description: Successfully created task
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  schedule_id:
+                    type: string
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /tasks/{taskID}:
+    get:
+      summary: Get task details by task ID
+      operationId: getTaskById
+      parameters:
+        - name: taskID
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Task details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '404':
+          description: Task not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /tasks/{taskID}/status:
+    put:
+      summary: Update the status of a task
+      operationId: updateTaskStatus
+      parameters:
+        - name: taskID
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTaskStatusRequest'
+      responses:
+        '200':
+          description: Successfully updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /workers/{workerID}/tasks:
+    get:
+      summary: Get tasks for a worker on a specific date
+      operationId: getWorkerTasks
+      parameters:
+        - name: workerID
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: date
+          in: query
+          schema:
+            type: string
+            format: date
+          description: "Date for which to retrieve tasks (YYYY-MM-DD). Defaults to today's date."
+      responses:
+        '200':
+          description: List of tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Task'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+
+  ###########################
+  #  WORKER ATTENDANCE      #
+  ###########################
+
+  /workers/{workerID}/attendance:
+    post:
+      summary: Record worker attendance (check-in)
+      operationId: recordWorkerAttendance
+      parameters:
+        - name: workerID
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecordAttendanceRequest'
+      responses:
+        '200':
+          description: Successfully recorded attendance
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    put:
+      summary: Update worker attendance (check-out)
+      operationId: updateWorkerAttendance
+      parameters:
+        - name: workerID
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAttendanceRequest'
+      responses:
+        '200':
+          description: Successfully updated attendance
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /job-sites/{siteID}/attendance:
+    get:
+      summary: Get worker attendance records for a job site on a specific date
+      operationId: getSiteAttendance
+      parameters:
+        - name: siteID
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          description: "Date (YYYY-MM-DD). Defaults to today's date."
+      responses:
+        '200':
+          description: List of worker attendance records
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WorkerAttendance'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
